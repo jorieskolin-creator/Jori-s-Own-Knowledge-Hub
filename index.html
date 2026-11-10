@@ -1,17 +1,94 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Jori's Knowledge Hub</title><style>
-:root{font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif;color:#142840;background:#f7f9fb}*{box-sizing:border-box}body{margin:0}button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.5;cursor:default}.hidden{display:none!important}.shell{min-height:100vh;display:grid;grid-template-columns:245px 1fr}aside{background:white;border-right:1px solid #e1e8ef;padding:28px 19px}.brand{font-size:22px;font-weight:800;letter-spacing:-.9px}.brand span{color:#0f9b75}.small{color:#64748b;font-size:12px}.nav{display:grid;gap:5px;margin:35px 0}.nav button{border:0;text-align:left;background:transparent;border-radius:9px;padding:11px 14px;color:#42536a}.nav button.active,.nav button:hover{background:#e5f5ee;color:#086b50}.body{padding:45px clamp(20px,5vw,65px);max-width:1400px;width:100%;margin:auto}.eyebrow{font-size:12px;letter-spacing:1.6px;text-transform:uppercase;color:#168b69;font-weight:800}h1{font-size:clamp(29px,4vw,44px);letter-spacing:-1.5px;line-height:1.1;margin:8px 0 13px}p{color:#617085}header p{max-width:690px}.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:28px 0}.controls input{flex:1;min-width:210px}input{background:white;border:1px solid #d5dfe9;border-radius:10px;padding:12px 14px;color:#173149}button.primary{border:0;background:#102a42;color:white;border-radius:10px;padding:12px 17px}button.secondary{border:1px solid #d3e0e8;background:white;color:#143149;border-radius:10px;padding:11px 16px}.stats{display:flex;gap:12px;flex-wrap:wrap}.stat,.card{background:white;border:1px solid #e0e7ef;border-radius:13px}.stat{padding:15px 19px;min-width:145px}.stat strong{display:block;font-size:25px}.stat span{font-size:12px;color:#64748b}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:15px;margin-top:19px}.card{padding:20px;display:flex;flex-direction:column;gap:9px;min-height:185px}.card h3{font-size:16px;margin:0;line-height:1.35}.card .meta{color:#718096;font-size:12px}.card .label{align-self:start;border-radius:20px;padding:4px 10px;background:#eaf8f2;color:#0d7957;font-size:11px}.card a{color:#087657;text-decoration:none;font-weight:700;margin-top:auto}.card a:hover{text-decoration:underline}.status{border-radius:8px;padding:12px 14px;background:#edf4f8;color:#31516a;margin:15px 0;font-size:13px}.status.warn{background:#fff3e6;color:#835213}.heading{display:flex;justify-content:space-between;align-items:center;margin-top:35px}.heading h2{font-size:21px;margin:0}.login{min-height:100vh;display:grid;place-items:center;padding:20px}.loginbox{max-width:430px;width:100%;background:#fff;border:1px solid #e0e7ef;border-radius:18px;padding:35px;box-shadow:0 16px 42px #1028400d}.loginbox h1{font-size:30px}.loginbox input,.loginbox button{width:100%;margin-top:12px}.error{color:#a52a36;font-size:13px}.footer{border-top:1px solid #e0e7ef;margin-top:40px;padding-top:20px;color:#778696;font-size:12px}.badge{display:inline-block;padding:3px 8px;border-radius:30px;background:#e9f8ee;color:#0c795b;font-size:11px}.badge.protected{background:#f0f0f7;color:#515477}@media(max-width:740px){.shell{display:block}aside{padding:15px 20px}.nav{display:flex;overflow:auto;margin:15px 0}.nav button{white-space:nowrap}.body{padding:30px 20px}}
+:root{font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif;color:#142840;background:#f7f9fb}*{box-sizing:border-box}body{margin:0}button,input{font:inherit}button{cursor:pointer}button:disabled{opacity:.5;cursor:default}.hidden{display:none!important}.shell{min-height:100vh;display:grid;grid-template-columns:245px 1fr}aside{background:white;border-right:1px solid #e1e8ef;padding:28px 19px}.brand{font-size:22px;font-weight:800;letter-spacing:-.9px}.brand span{color:#0f9b75}.small{color:#64748b;font-size:12px}.nav{display:grid;gap:5px;margin:35px 0}.nav button{border:0;text-align:left;background:transparent;border-radius:9px;padding:11px 14px;color:#42536a}.nav button.active,.nav button:hover{background:#e5f5ee;color:#086b50}.body{padding:45px clamp(20px,5vw,65px);max-width:1400px;width:100%;margin:auto}.eyebrow{font-size:12px;letter-spacing:1.6px;text-transform:uppercase;color:#168b69;font-weight:800}h1{font-size:clamp(29px,4vw,44px);letter-spacing:-1.5px;line-height:1.1;margin:8px 0 13px}p{color:#617085}header p{max-width:690px}.controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:28px 0}.controls input{flex:1;min-width:210px}input{background:white;border:1px solid #d5dfe9;border-radius:10px;padding:12px 14px;color:#173149}button.primary{border:0;background:#102a42;color:white;border-radius:10px;padding:12px 17px}button.secondary{border:1px solid #d3e0e8;background:white;color:#143149;border-radius:10px;padding:11px 16px}.stats{display:flex;gap:12px;flex-wrap:wrap}.stat,.card{background:white;border:1px solid #e0e7ef;border-radius:13px}.stat{padding:15px 19px;min-width:145px}.stat strong{display:block;font-size:25px}.stat span{font-size:12px;color:#64748b}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:15px;margin-top:19px}.card{padding:20px;display:flex;flex-direction:column;gap:9px;min-height:185px}.card h3{font-size:16px;margin:0;line-height:1.35}.card .meta{color:#718096;font-size:12px}.card .label{align-self:start;border-radius:20px;padding:4px 10px;background:#eaf8f2;color:#0d7957;font-size:11px}.card a{color:#087657;text-decoration:none;font-weight:700;margin-top:auto}.card a:hover{text-decoration:underline}.status{border-radius:8px;padding:12px 14px;background:#edf4f8;color:#31516a;margin:15px 0;font-size:13px}.status.warn{background:#fff3e6;color:#835213}.heading{display:flex;justify-content:space-between;align-items:center;margin-top:35px}.heading h2{font-size:21px;margin:0}.login{min-height:100vh;display:grid;place-items:center;padding:20px}.loginbox{max-width:430px;width:100%;background:#fff;border:1px solid #e0e7ef;border-radius:18px;padding:35px;box-shadow:0 16px 42px #1028400d}.loginbox h1{font-size:30px}.loginbox input,.loginbox button{width:100%;margin-top:12px}.error{color:#a52a36;font-size:13px}.footer{border-top:1px solid #e0e7ef;margin-top:40px;padding-top:20px;color:#778696;font-size:12px}.badge{display:inline-block;padding:3px 8px;border-radius:30px;background:#e9f8ee;color:#0c795b;font-size:11px}.badge.protected{background:#f0f0f7;color:#515477}.foldercard{min-height:155px;cursor:pointer;text-align:left;width:100%;color:inherit;transition:border-color .15s,transform .15s}.foldercard:hover,.foldercard:focus-visible{border-color:#54ad91;transform:translateY(-2px)}.foldercard .foldericon{font-size:25px;line-height:1}.foldercard .foldercount{font-size:13px;color:#617085;margin-top:auto}.breadcrumb{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:20px}.breadcrumb button{border:0;background:none;color:#0b8061;padding:4px 0}.breadcrumb span{color:#778696}.folder-summary{color:#64748b;font-size:13px;margin-top:4px}@media(max-width:740px){.shell{display:block}aside{padding:15px 20px}.nav{display:flex;overflow:auto;margin:15px 0}.nav button{white-space:nowrap}.body{padding:30px 20px}}
 </style></head><body>
 <div id="login" class="login"><form class="loginbox" id="loginForm"><div class="brand">Knowledge<span>Hub</span></div><div class="eyebrow" style="margin-top:25px">Administrator access</div><h1>Your knowledge, in context.</h1><p>Enter your admin password to access the document library and refresh both storage locations.</p><input id="password" type="password" autocomplete="current-password" required placeholder="Admin password" aria-label="Admin password"><button class="primary" type="submit" id="loginButton">Unlock Knowledge Hub</button><p id="loginError" class="error" role="alert"></p></form></div>
-<div id="app" class="shell hidden"><aside><div class="brand">Knowledge<span>Hub</span></div><div class="small">Private admin workspace</div><nav id="nav" class="nav"></nav><div class="small">All categories are visible. Documents in Private Blob require authentication for readers. Folder placeholders are not documents.</div><button class="secondary" style="margin-top:25px" id="logout">Log out</button></aside><main class="body"><header><div class="eyebrow">Jori's Own Knowledge Hub</div><h1>Find the knowledge.<br>Keep the context.</h1><p>Public and protected documents, organized in six categories. The library detects new HTML files in Blob storage when refreshed.</p></header><div id="stats" class="stats"></div><div class="controls"><input id="q" type="search" placeholder="Search documents, solutions and categories…" aria-label="Search documents"><button class="secondary" id="refresh">↻ Refresh Documents</button><button class="secondary" id="initialize">Create Folder Structure</button></div><div id="alert" role="status"></div><div class="heading"><h2 id="heading">All documents</h2><span id="results" class="small"></span></div><div id="cards" class="grid"></div><div class="footer">Document status reflects its source store. The Public store is openly accessible; the Private store requires authenticated delivery. Moving copies does not invalidate an old public URL: delete the old blob separately and verify revocation.</div></main></div>
+<div id="app" class="shell hidden"><aside><div class="brand">Knowledge<span>Hub</span></div><div class="small">Private admin workspace</div><nav id="nav" class="nav"></nav><div class="small">All categories are visible. Documents in Private Blob require authentication for readers. Folder placeholders are not documents.</div><button class="secondary" style="margin-top:25px" id="logout">Log out</button></aside><main class="body"><header><div class="eyebrow">Jori's Own Knowledge Hub</div><h1>Find the knowledge.<br>Keep the context.</h1><p>Public and protected documents, organized in six categories. The library detects new HTML files in Blob storage when refreshed.</p></header><div id="stats" class="stats"></div><div class="controls"><input id="q" type="search" placeholder="Search documents, solutions and categories…" aria-label="Search documents"><button class="secondary" id="refresh">↻ Refresh Documents</button><button class="secondary" id="initialize">Create Folder Structure</button></div><div id="alert" role="status"></div><div id="breadcrumbs" class="breadcrumb hidden"></div><div class="heading"><h2 id="heading">All documents</h2><span id="results" class="small"></span></div><div id="cards" class="grid"></div><div class="footer">Document status reflects its source store. The Public store is openly accessible; the Private store requires authenticated delivery. Moving copies does not invalidate an old public URL: delete the old blob separately and verify revocation.</div></main></div>
 <script>
 const areas=[['all','All documents'],['Solutions','Solutions'],['Frameworks & Methods','Frameworks & Methods'],['General Presentations','General Presentations'],['Shared Knowledge','Shared Knowledge'],['Random','Random'],['Personal','Personal']];
-const $=id=>document.getElementById(id);let documents=[],area='all';let counts={public:0,private:0,legacy:0};
+const SOLUTIONS=[
+{id:'scanner',name:'Scanner'},
+{id:'solution-assurance-engine',name:'Solution Assurance Engine'},
+{id:'solution-assurance-documentation-support',name:'Solution Assurance Documentation Support'},
+{id:'finops-engine',name:'FinOps Engine'},
+{id:'lz-assessment-engine',name:'LZ Assessment Engine'},
+{id:'rfp-and-simulator',name:'RFP + Simulator'},
+{id:'ai-transformation-engine',name:'AI Transformation Engine'},
+{id:'cscf-demo',name:'CSCF Demo'}
+];
+const $=id=>document.getElementById(id);let documents=[],area='all',solution=null;let counts={public:0,private:0,legacy:0};
 function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=String(text);return n}
 function msg(text,warn=false){$('alert').replaceChildren();if(text)$('alert').append(el('div','status'+(warn?' warn':''),text))}
-function showLogin(){ $('app').classList.add('hidden');$('login').classList.remove('hidden') }
-function showApp(){ $('login').classList.add('hidden');$('app').classList.remove('hidden') }
+function showLogin(){$('app').classList.add('hidden');$('login').classList.remove('hidden')}
+function showApp(){$('login').classList.add('hidden');$('app').classList.remove('hidden')}
 async function api(url,options={}){const r=await fetch(url,{credentials:'same-origin',cache:'no-store',...options});let d={};try{d=await r.json()}catch{}if(!r.ok)throw Error(d.error||'Request failed ('+r.status+')');return d}
-function draw(){const nav=$('nav');nav.replaceChildren();for(const [key,name] of areas){const b=el('button',key===area?'active':'',name);b.onclick=()=>{area=key;draw()};nav.append(b)}const filter=$('q').value.trim().toLowerCase();const shown=documents.filter(d=>(area==='all'||d.category===area)&&[d.title,d.group,d.category,d.pathname||''].join(' ').toLowerCase().includes(filter));$('heading').textContent=area==='all'?'All documents':area;$('results').textContent=shown.length+' found';$('stats').replaceChildren();for(const [n,l] of [[documents.length,'Indexed documents'],[counts.public+counts.legacy,'Public'],[counts.private,'Protected'],[6,'Categories']]){const s=el('div','stat');s.append(el('strong','',n),el('span','',l));$('stats').append(s)}$('cards').replaceChildren();if(!shown.length){$('cards').append(el('p','small','No documents in this category yet.'));return}for(const d of shown){const card=el('article','card');card.append(el('span','label',d.group||d.category),el('h3','',d.title),el('div','meta',(d.access==='private'?'🔐 Protected · Guest password':'Public · No reader password')+(d.updated?' · '+String(d.updated).slice(0,10):'')));const a=el('a','',d.access==='private'?'Open protected page ↗':'View document ↗');a.href=d.origin==='blob'?'/view.html?access='+encodeURIComponent(d.access)+'&pathname='+encodeURIComponent(d.pathname):d.url;a.target='_blank';a.rel='noopener noreferrer';card.append(a);$('cards').append(card)}}
+function normalize(s){return String(s||'').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')}
+function documentSolution(d){
+  if(d.category!=='Solutions')return null;
+  const parts=String(d.pathname||'').split('/');
+  if(parts[0]==='01-solutions'&&parts.length>=3){
+    const folder=normalize(parts[1]);
+    const matching=SOLUTIONS.find(s=>s.id===folder);
+    if(matching)return matching.id;
+  }
+  const group=normalize(d.group);
+  const exact=SOLUTIONS.find(s=>group===s.id||group.startsWith(s.id+'-'));
+  if(exact)return exact.id;
+  const hint=normalize([d.group,d.title].join(' '));
+  // Legacy documents do not have Blob subfolder paths; classify only recognizable names.
+  if(hint.includes('documentation-support')||hint.includes('docsupport'))return 'solution-assurance-documentation-support';
+  if(hint.includes('landing-zone')||hint.includes('lz-assessment'))return 'lz-assessment-engine';
+  if(hint.includes('finops'))return 'finops-engine';
+  if(hint.includes('cscf'))return 'cscf-demo';
+  if(hint.includes('ai-transformation'))return 'ai-transformation-engine';
+  if(hint.includes('solution-assurance'))return 'solution-assurance-engine';
+  if(hint.includes('rfp')||hint.includes('simulator'))return 'rfp-and-simulator';
+  if(hint.includes('scanner'))return 'scanner';
+  return 'unclassified';
+}
+function createDocCard(d){
+  const card=el('article','card');
+  card.append(el('span','label',d.group||d.category),el('h3','',d.title),
+    el('div','meta',(d.access==='private'?'🔐 Protected · Guest password':'Public · No reader password')+(d.updated?' · '+String(d.updated).slice(0,10):'')));
+  const a=el('a','',d.access==='private'?'Open protected page ↗':'View document ↗');
+  a.href=d.origin==='blob'?'/view.html?access='+encodeURIComponent(d.access)+'&pathname='+encodeURIComponent(d.pathname):d.url;
+  a.target='_blank';a.rel='noopener noreferrer';card.append(a);return card;
+}
+function draw(){
+  const nav=$('nav');nav.replaceChildren();
+  for(const [key,name] of areas){const b=el('button',key===area?'active':'',name);b.onclick=()=>{area=key;solution=null;$('q').value='';draw()};nav.append(b)}
+  const filter=$('q').value.trim().toLowerCase();
+  const matches=d=>[d.title,d.group,d.category,d.pathname||''].join(' ').toLowerCase().includes(filter);
+  const filtered=documents.filter(d=>(area==='all'||d.category===area)&&matches(d));
+  const crumb=$('breadcrumbs');crumb.replaceChildren();crumb.classList.add('hidden');
+  const solutionName=SOLUTIONS.find(s=>s.id===solution)?.name||'Other Solutions';
+  $('heading').textContent=solution&&area==='Solutions'?solutionName:area==='all'?'All documents':area;
+  $('stats').replaceChildren();
+  for(const [n,l] of [[documents.length,'Indexed documents'],[counts.public+counts.legacy,'Public'],[counts.private,'Protected'],[6,'Categories']]){
+    const s=el('div','stat');s.append(el('strong','',n),el('span','',l));$('stats').append(s)
+  }
+  const cards=$('cards');cards.replaceChildren();
+  if(area==='Solutions'&&!solution&&!filter){
+    const all=documents.filter(d=>d.category==='Solutions');
+    $('results').textContent=all.length+' documents · '+SOLUTIONS.length+' folders';
+    for(const folder of [...SOLUTIONS,{id:'unclassified',name:'Other Solutions'}]){
+      const list=all.filter(d=>documentSolution(d)===folder.id);
+      if(folder.id==='unclassified'&&!list.length)continue;
+      const button=el('button','card foldercard');button.type='button';
+      button.append(el('div','foldericon','▱'),el('h3','',folder.name),el('div','foldercount',list.length+' document'+(list.length===1?'':'s')+' · Open folder →'));
+      button.onclick=()=>{solution=folder.id;draw()};cards.append(button)
+    }
+    return;
+  }
+  if(area==='Solutions'&&solution){
+    crumb.classList.remove('hidden');
+    const back=el('button','','Solutions');back.onclick=()=>{solution=null;draw()};
+    crumb.append(back,el('span','','›'),el('strong','',solutionName));
+  }
+  const shown=area==='Solutions'&&solution?filtered.filter(d=>documentSolution(d)===solution):filtered;
+  $('results').textContent=shown.length+' document'+(shown.length===1?'':'s');
+  if(!shown.length){cards.append(el('p','small','No matching documents.'));return}
+  for(const d of shown)cards.append(createDocCard(d));
+}
 async function refresh(){const b=$('refresh');b.disabled=true;msg('Scanning both storage locations…');try{const result=await api('/api/documents');documents=result.documents||[];counts=result.counts||counts;draw();msg(result.warnings?.length?('Inventory updated. '+result.warnings.join(' ')):'Inventory refreshed from Blob storage.',!!result.warnings?.length)}catch(e){msg(e.message,true);if(/login/i.test(e.message))showLogin()}finally{b.disabled=false}}
 $('loginForm').onsubmit=async e=>{e.preventDefault();$('loginButton').disabled=true;$('loginError').textContent='';try{await api('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:$('password').value})});$('password').value='';showApp();await refresh()}catch(err){$('loginError').textContent=err.message}finally{$('loginButton').disabled=false}};
 $('logout').onclick=async()=>{try{await api('/api/logout',{method:'POST'})}finally{documents=[];showLogin()}};
