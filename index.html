@@ -49,7 +49,7 @@ function createDocCard(d){
   const card=el('article','card');
   card.append(el('span','label',d.group||d.category),el('h3','',d.title),
     el('div','meta',(d.access==='private'?'🔐 Protected · Guest password':'Public · No reader password')+(d.updated?' · '+String(d.updated).slice(0,10):'')));
-  const a=el('a','',d.access==='private'?'Open protected page ↗':'View document ↗');
+  const a=el('a','',d.access==='private'?'Open protected document ↗':'View document ↗');
   a.href=d.origin==='blob'?'/view.html?access='+encodeURIComponent(d.access)+'&pathname='+encodeURIComponent(d.pathname):d.url;
   a.target='_blank';a.rel='noopener noreferrer';card.append(a);return card;
 }
