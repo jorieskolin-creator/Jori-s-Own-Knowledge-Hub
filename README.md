@@ -60,3 +60,15 @@ Private store: `store_YAAwH6FewcrImhA1` (**must be connected** to the `knowledge
 
 ## Future improvements
 Durable rate limiting, security verification, UI category-subfolders, richer metadata, content-validation, consistent document version IDs, and automatic alerts when an old public URL is still active.
+
+
+## HTML and PDF shareable viewing (v1.2)
+- Files ending in `.html`, `.htm`, or `.pdf` are discoverable in the six folder categories.
+- Blob-backed document cards open `/view.html?access=public|private&pathname=<blob-path>` rather than linking to the raw storage download.
+- `/api/view` streams the file with `Content-Disposition: inline`; PDFs are served as `application/pdf`, HTML as `text/html`.
+- Public document viewing does not require the admin password. Private viewing requires the guest password (or a current admin session).
+- Uploaded HTML is rendered with a restrictive Content-Security-Policy `sandbox` and an iframe without `allow-same-origin`. This is essential: untrusted user-authored HTML must not access Knowledge Hub's admin-session origin.
+- Browser-native PDF display works in supporting browsers; readers may still choose to download. PDF viewers vary by device.
+- **Known limitation:** HTML presentations that load relative assets (CSS, JS, fonts, images) or depend on an unsandboxed document origin may need asset rewriting or independent deployment. Test each document after adding.
+- **Known limitation:** Protected links are session-cookie based; copying a rendered document URL to a different browser requires its guest password.
+- Never use an old public Blob or independent deployment URL to test protection. Such links must be deleted or restricted separately.
