@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0",
+  "visibility": "public",
+  "updated": "2026-11-10",
+  "documents": [
+    {
+      "id": "lz-docsupport-20261109",
+      "title": "Landing Zone Assessment Engine — DocSupport Summary",
+      "category": "solutions",
+      "group": "Documentation Support / Landing Zone",
+      "description": "Simulation of documentation coverage and lifecycle status.",
+      "url": "https://landingzoneassessmentenginedocsupportsummary09-whcwo2px2.vercel.app/",
+      "updated": "2026-11-09",
+      "authority": "working-reference",
+      "public_approved_for_catalog": true
+    },
+    {
+      "id": "docsupport-plan-20261109",
+      "title": "Documentation Support — Evidence-Gated Pipeline Plan",
+      "category": "solutions",
+      "group": "Documentation Support",
+      "description": "Evidence-gated documentation support design proposal.",
+      "url": "https://documentationsupportevidencegatedpipelineplan0-1fzo8v611.vercel.app/",
+      "updated": "2026-11-09",
+      "authority": "working-reference",
+      "public_approved_for_catalog": true
+    }
+  ]
+}
