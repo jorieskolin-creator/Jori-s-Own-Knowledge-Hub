@@ -8,9 +8,9 @@ else{
   const src='/api/view?access='+encodeURIComponent(access)+'&pathname='+encodeURIComponent(pathname);
   // Public and protected documents use the exact same rendering endpoint.
   // The iframe's opaque origin isolates uploaded HTML from admin session cookies.
-  const iframe=document.createElement('iframe');iframe.sandbox='allow-scripts allow-forms allow-popups';iframe.referrerPolicy='no-referrer';iframe.title='Document preview';iframe.src=src;
+  const iframe=document.createElement('iframe');if(!/\.pdf$/i.test(pathname))iframe.sandbox='allow-scripts allow-forms allow-popups';iframe.referrerPolicy='no-referrer';iframe.title='Document preview';iframe.src=src;
   if(access==='private'){
-    fetch('/api/view?access=private&pathname='+encodeURIComponent(pathname),{credentials:'same-origin',cache:'no-store'}).then(r=>{
+    fetch('/api/view?access=private&pathname='+encodeURIComponent(pathname),{method:'HEAD',credentials:'same-origin',cache:'no-store'}).then(r=>{
       if(r.status===401){location.replace('/read.html?pathname='+encodeURIComponent(pathname));return}
       if(!r.ok){status.textContent='Could not load protected file ('+r.status+')';return}
       main.append(iframe)
