@@ -72,3 +72,6 @@ Durable rate limiting, security verification, UI category-subfolders, richer met
 - **Known limitation:** HTML presentations that load relative assets (CSS, JS, fonts, images) or depend on an unsandboxed document origin may need asset rewriting or independent deployment. Test each document after adding.
 - **Known limitation:** Protected links are session-cookie based; copying a rendered document URL to a different browser requires its guest password.
 - Never use an old public Blob or independent deployment URL to test protection. Such links must be deleted or restricted separately.
+
+## Document visibility rule
+Blob discovery indexes only HTML, HTM and PDF documents located inside one of the six designated category prefixes (`01-solutions/` through `06-personal/`). Files uploaded to a store's root or outside these prefixes are deliberately **not shown** in Knowledge Hub; move the file into a category folder to publish it in the catalog. The `05-random/` category is intentional and never a fallback for unclassified root files. Legacy curated links in `catalog/public-documents.json` are independent catalog entries.
