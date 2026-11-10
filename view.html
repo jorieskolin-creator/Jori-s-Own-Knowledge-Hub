@@ -1,0 +1,20 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Document · Knowledge Hub</title><style>body{margin:0;color:#143047;background:#f4f7fa;font:14px/1.5 system-ui,sans-serif}header{padding:13px 21px;background:white;border-bottom:1px solid #dce4eb;display:flex;align-items:center;gap:12px;flex-wrap:wrap}header strong{font-size:17px}header span{color:#64748b}header a{margin-left:auto;color:#087657;text-decoration:none}iframe{width:100%;height:calc(100dvh - 67px);border:0;background:white}main{min-height:70vh}#error{padding:30px}button{border:1px solid #cbd5df;border-radius:8px;background:white;padding:9px 12px;cursor:pointer}</style></head><body><header><strong>Knowledge Hub · Document Viewer</strong><span id="status">Preparing document</span><a href="https://jori-knowledge-hub.vercel.app/">Knowledge Hub</a></header><main id="main"></main><script>
+const params=new URLSearchParams(location.search),access=params.get('access'),pathname=params.get('pathname');
+const valid=!!pathname&&/^0[1-6]-[a-z-]+\/.+\.(html?|pdf)$/i.test(pathname)&&!pathname.split('/').some(s=>s==='.'||s==='..'||s.startsWith('.'));
+const status=document.getElementById('status'),main=document.getElementById('main');
+if(!valid||!['public','private'].includes(access)){status.textContent='Invalid link';main.textContent='Document path is invalid.'}
+else{
+  status.textContent=(access==='private'?'🔐 Protected · ':'Public · ')+pathname.split('/').pop();
+  const src='/api/view?access='+encodeURIComponent(access)+'&pathname='+encodeURIComponent(pathname);
+  // Public and protected documents use the exact same rendering endpoint.
+  // The iframe's opaque origin isolates uploaded HTML from admin session cookies.
+  const iframe=document.createElement('iframe');iframe.sandbox='allow-scripts allow-forms allow-popups';iframe.referrerPolicy='no-referrer';iframe.title='Document preview';iframe.src=src;
+  if(access==='private'){
+    fetch('/api/view?access=private&pathname='+encodeURIComponent(pathname),{credentials:'same-origin',cache:'no-store'}).then(r=>{
+      if(r.status===401){location.replace('/read.html?pathname='+encodeURIComponent(pathname));return}
+      if(!r.ok){status.textContent='Could not load protected file ('+r.status+')';return}
+      main.append(iframe)
+    }).catch(()=>status.textContent='Document unavailable');
+  }else main.append(iframe)
+}
+</script></body></html>
