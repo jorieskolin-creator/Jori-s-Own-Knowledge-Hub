@@ -1,3 +1,18 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>Protected document · Knowledge Hub</title><style>body{font:16px/1.5 system-ui;background:#f6f8fa;color:#142840;min-height:100vh;margin:0;display:grid;place-items:center;padding:20px}form{background:white;max-width:430px;width:100%;border:1px solid #dde5ed;border-radius:16px;padding:32px}input,button{display:block;width:100%;padding:13px;margin-top:16px;border-radius:9px;font:inherit;box-sizing:border-box}input{border:1px solid #cbd6e2}button{background:#102840;color:white;border:0;cursor:pointer}p{color:#66758a}.error{color:#a52a36}</style></head><body><form id="form"><h1>🔐 Protected document</h1><p>Enter the guest password to open this document. Administrators already signed in to Knowledge Hub can open this document without entering another password. Guests can enter the guest password; their session is valid for two hours.</p><input id="password" type="password" autocomplete="current-password" aria-label="Guest password" required placeholder="Guest password"><button type="submit">Open document</button><p id="error" class="error" role="alert"></p></form><script>
-const path=new URLSearchParams(location.search).get('pathname');const dest='/api/view?access=private&pathname='+encodeURIComponent(path||'');if(!path||!/^0[1-6]-[a-z-]+\/.+\.html?$/i.test(path)||path.includes('..'))document.getElementById('error').textContent='Invalid document link.';
-document.getElementById('form').onsubmit=async e=>{e.preventDefault();if(!isValid)return;try{const r=await fetch('/api/guest-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('password').value})});if(!r.ok){document.getElementById('error').textContent='Incorrect guest password or authentication unavailable';return}location.replace(dest)}catch{document.getElementById('error').textContent='Unable to contact authentication service'}};</script></body></html>
+const path=new URLSearchParams(location.search).get('pathname');
+const isValid=!!path && /^0[1-6]-[a-z-]+\\/.+\\.(?:html?|pdf)$/i.test(path) && !path.split('/').some(p=>p==='.'||p==='..'||p.startsWith('.'));
+const dest='/view.html?access=private&pathname='+encodeURIComponent(path||'');
+const error=document.getElementById('error');
+if(!isValid) error.textContent='Invalid document link.';
+else fetch('/api/session',{credentials:'same-origin',cache:'no-store'})
+  .then(r=>r.json()).then(d=>{if(d.authenticated)location.replace(dest)}).catch(()=>{});
+document.getElementById('form').onsubmit=async e=>{
+ e.preventDefault();
+ if(!isValid)return;
+ try{
+  const r=await fetch('/api/guest-login',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:document.getElementById('password').value})});
+  if(!r.ok){error.textContent='Incorrect guest password or authentication unavailable';return}
+  location.replace(dest);
+ }catch{error.textContent='Unable to contact authentication service'}
+};
+</script></body></html>
