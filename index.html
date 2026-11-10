@@ -7,8 +7,7 @@
 const areas=[['all','All documents'],['Solutions','Solutions'],['Frameworks & Methods','Frameworks & Methods'],['General Presentations','General Presentations'],['Shared Knowledge','Shared Knowledge'],['Random','Random'],['Personal','Personal']];
 const SOLUTIONS=[
 {id:'scanner',name:'Scanner'},
-{id:'solution-assurance-engine',name:'Solution Assurance Engine'},
-{id:'solution-assurance-documentation-support',name:'Solution Assurance Documentation Support'},
+{id:'solution-assurance-concept',name:'Solution Assurance Concept'},
 {id:'finops-engine',name:'FinOps Engine'},
 {id:'lz-assessment-engine',name:'LZ Assessment Engine'},
 {id:'rfp-and-simulator',name:'RFP + Simulator'},
@@ -29,18 +28,19 @@ function documentSolution(d){
     const folder=normalize(parts[1]);
     const matching=SOLUTIONS.find(s=>s.id===folder);
     if(matching)return matching.id;
+    if(folder==='solution-assurance-documentation-support')return 'solution-assurance-concept';
   }
   const group=normalize(d.group);
   const exact=SOLUTIONS.find(s=>group===s.id||group.startsWith(s.id+'-'));
   if(exact)return exact.id;
   const hint=normalize([d.group,d.title].join(' '));
   // Legacy documents do not have Blob subfolder paths; classify only recognizable names.
-  if(hint.includes('documentation-support')||hint.includes('docsupport'))return 'solution-assurance-documentation-support';
+  if(hint.includes('documentation-support')||hint.includes('docsupport')||hint.includes('solution-assurance-concept'))return 'solution-assurance-concept';
   if(hint.includes('landing-zone')||hint.includes('lz-assessment'))return 'lz-assessment-engine';
   if(hint.includes('finops'))return 'finops-engine';
   if(hint.includes('cscf'))return 'cscf-demo';
   if(hint.includes('ai-transformation'))return 'ai-transformation-engine';
-  if(hint.includes('solution-assurance'))return 'solution-assurance-engine';
+  // Other historical Solution Assurance documents are retained under Other Solutions.
   if(hint.includes('rfp')||hint.includes('simulator'))return 'rfp-and-simulator';
   if(hint.includes('scanner'))return 'scanner';
   return 'unclassified';
@@ -93,6 +93,6 @@ async function refresh(){const b=$('refresh');b.disabled=true;msg('Scanning both
 $('loginForm').onsubmit=async e=>{e.preventDefault();$('loginButton').disabled=true;$('loginError').textContent='';try{await api('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:$('password').value})});$('password').value='';showApp();await refresh()}catch(err){$('loginError').textContent=err.message}finally{$('loginButton').disabled=false}};
 $('logout').onclick=async()=>{try{await api('/api/logout',{method:'POST'})}finally{documents=[];showLogin()}};
 $('q').oninput=draw;$('refresh').onclick=refresh;
-$('initialize').onclick=async()=>{if(!confirm('Create six category prefixes and eight Solutions subfolder prefixes in each available Blob store? This writes .folder placeholders.'))return;$('initialize').disabled=true;try{const r=await api('/api/initialize-folders',{method:'POST'});msg('Created '+r.created+' of '+r.expected+' folder placeholders. '+(r.errors?.length?r.errors.join('; '):''),!!r.errors?.length)}catch(e){msg(e.message,true)}finally{$('initialize').disabled=false}};
+$('initialize').onclick=async()=>{if(!confirm('Create six category prefixes and seven Solutions subfolder prefixes in each available Blob store? This writes .folder placeholders.'))return;$('initialize').disabled=true;try{const r=await api('/api/initialize-folders',{method:'POST'});msg('Created '+r.created+' of '+r.expected+' folder placeholders. '+(r.errors?.length?r.errors.join('; '):''),!!r.errors?.length)}catch(e){msg(e.message,true)}finally{$('initialize').disabled=false}};
 (async()=>{try{const r=await api('/api/session');if(r.authenticated){showApp();await refresh()}else showLogin()}catch{showLogin()}})();
 </script></body></html>
