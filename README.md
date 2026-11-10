@@ -8,15 +8,14 @@ Live site: https://jori-knowledge-hub.vercel.app/
 - Public documents open from their direct Blob URL.
 - Private documents are listed only to administrators, and served via `/api/private-document` after admin or guest authentication (`GUEST_PASSWORD`).
 - Admin `Refresh Documents` scans both stores when the hub is opened and on demand.
-- Admin `Create Folder Structure` writes `.folder` placeholders for 6 categories and 8 Solutions folders to both stores once each store grants access. Placeholders are filtered from the HTML catalog.
+- Admin `Create Folder Structure` writes `.folder` placeholders for 6 categories and 7 Solutions folders to both stores once each store grants access. Placeholders are filtered from the HTML catalog.
 
 ## Blob structure — both stores
 
 ```
 01-solutions/
   scanner/
-  solution-assurance-engine/
-  solution-assurance-documentation-support/
+  solution-assurance-concept/
   finops-engine/
   lz-assessment-engine/
   rfp-and-simulator/
@@ -75,3 +74,6 @@ Durable rate limiting, security verification, UI category-subfolders, richer met
 
 ## Document visibility rule
 Blob discovery indexes only HTML, HTM and PDF documents located inside one of the six designated category prefixes (`01-solutions/` through `06-personal/`). Files uploaded to a store's root or outside these prefixes are deliberately **not shown** in Knowledge Hub; move the file into a category folder to publish it in the catalog. The `05-random/` category is intentional and never a fallback for unclassified root files. Legacy curated links in `catalog/public-documents.json` are independent catalog entries.
+
+## Solution Assurance folder naming update
+The current Solutions navigation uses `solution-assurance-concept/` and no longer includes `solution-assurance-engine/`. Historical files stored under `solution-assurance-documentation-support/` are displayed in Solution Assurance Concept for backward compatibility. Existing Blob files or `.folder` placeholder objects are **not deleted or moved** by changing this repository; reorganize existing Blob paths manually when needed.
