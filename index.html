@@ -28,7 +28,7 @@ function documentSolution(d){
     const folder=normalize(parts[1]);
     const matching=SOLUTIONS.find(s=>s.id===folder);
     if(matching)return matching.id;
-    if(folder==='solution-assurance-documentation-support')return 'solution-assurance-concept';
+    if(['solution-assurance-engine','solution-assurance-documentation-support','solution-assurance-concept'].includes(folder))return 'solution-assurance-concept';
   }
   const group=normalize(d.group);
   const exact=SOLUTIONS.find(s=>group===s.id||group.startsWith(s.id+'-'));
