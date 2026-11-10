@@ -1,44 +1,62 @@
 # Jori's Own Knowledge Hub
 
-This is the **public-facing** six-category documentation catalog. GitHub is the version-controlled source; Vercel serves the website. Only deliberately public-approved records belong here.
+Live site: https://jori-knowledge-hub.vercel.app/
 
-## Categories
-1. `solutions/` — Solution-specific documentation
-2. `frameworks/` — Reusable methods and frameworks
-3. `general-presentations/` — Essays, strategic presentations, research
-4. `shared-knowledge/` — Cross-cutting principles and evidence models
-5. `random/` — Unclassified exploratory materials
-6. `personal/` — **Public-approved** CV, portfolio and professional material only
+## Application status (v1.1)
+- Six categories with on-demand HTML discovery from Public and Private Vercel Blob stores.
+- Server-side admin login using `ADMIN_PASSWORD`, signed HttpOnly session using `SESSION_SECRET`, logout and session expiry.
+- Public documents open from their direct Blob URL.
+- Private documents are listed only to administrators, and served via `/api/private-document` after admin or guest authentication (`GUEST_PASSWORD`).
+- Admin `Refresh Documents` scans both stores when the hub is opened and on demand.
+- Admin `Create Folder Structure` writes `.folder` placeholders for 6 categories and 8 Solutions folders to both stores once each store grants access. Placeholders are filtered from the HTML catalog.
 
-## Recommended solution convention
-`solutions/<solution-id>/{concept,architecture,requirements,verification,roadmap,presentations}/`
+## Blob structure — both stores
 
-Create a subfolder only when there is a real document for it. The category folders in this repository provide guidance; the linked HTML documents may remain on existing independent Vercel deployments.
+```
+01-solutions/
+  scanner/
+  solution-assurance-engine/
+  solution-assurance-documentation-support/
+  finops-engine/
+  lz-assessment-engine/
+  rfp-and-simulator/
+  ai-transformation-engine/
+  cscf-demo/
+02-frameworks/
+03-general-presentations/
+04-shared-knowledge/
+05-random/
+06-personal/
+```
 
-## Adding a document
-1. Confirm the document and *its source URL* are suitable for a public catalog.
-2. Add an entry to `catalog/public-documents.json`, specifying title, category, group, description, URL, ISO date, and authority status.
-3. Update the JavaScript `docs` array in `index.html` (temporary v1 implementation; future task: fetch the JSON catalog directly).
-4. Verify the URL, status, classification, and deployment.
-5. For revisions, preserve version provenance, replace outdated links intentionally, and document any retired material.
+Vercel Blob folders are virtual pathname prefixes, not persistent empty directories.
 
-## Authority model
-- `working-reference`: idea or working artifact, not approved.
-- `validated`: subject-matter reviewed and validated.
-- `authoritative`: explicitly approved source of truth.
-- `historical`: superseded/retained for traceability.
+## Configuration
+Vercel Production sensitive environment variables:
+- `ADMIN_PASSWORD`
+- `GUEST_PASSWORD`
+- `SESSION_SECRET` (random >=32 characters)
 
-No record should become authoritative automatically because it is the newest deployment.
+Public store: `store_6mg9Vu2ypJJMAwV3` (already connected).
+Private store: `store_YAAwH6FewcrImhA1` (**must be connected** to the `knowledge-hub` Vercel project via Storage > KnowledgeHub-Private > Projects > Connect project). If it is not linked, the API reports a warning instead of exposing contents. The code passes explicit store IDs to the Blob SDK using Vercel-managed OIDC credentials. Redeploy after connecting the store.
 
-## Hybrid access — critical security boundary
-**The public repository and deployment must never contain private HTML, private URLs, private metadata, or access credentials.** Do not use CSS hiding, client-side passwords, or unlinked routes as protection.
+### Initial setup
+1. Verify `ADMIN_PASSWORD`, `GUEST_PASSWORD`, and `SESSION_SECRET` exist in Production.
+2. Connect **KnowledgeHub-Private** to the existing Vercel project and ensure both stores are accessible with the deployed function's credentials.
+3. Redeploy `main`.
+4. Sign in at the live site. Select **Create Folder Structure** to write `.folder` placeholders.
+5. Upload an HTML document into each selected pathname in the appropriate store.
+6. Select **Refresh Documents** to verify indexing. Private document links go through the guest password page.
 
-A future **separate private GitHub repository and separate Vercel project** must enforce authentication at the deployment boundary (for example Vercel Authentication, after verifying account/plan support), including previews, deployment URLs and assets. Validate authorization with an anonymous request before uploading any sensitive content. Keep a separate private catalog and avoid merging it into the public build.
+## Important security limitations
+- This is an initial implementation, not a completed security audit. Verify direct unauthenticated requests to `/api/documents` and `/api/private-document` are rejected, and validate all domains/preview deployments. An admin-login lock is not a substitute for platform access controls on the underlying storage.
+- **The login endpoint does not yet have durable brute-force rate limiting.** Add Vercel WAF/rate-limit rules before relying on it for sensitive data.
+- The public GitHub repository includes only public source/configuration, not passwords or private file metadata.
+- Private Blob URLs cannot be fetched publicly. Private HTML is delivered with a restrictive sandbox CSP; interactive functionality that relies on same-origin privileges may not work.
+- The legacy static catalog entries are links to previously published URLs and are not managed by Blob locking.
+- Copying a public document to Private Blob does **not** revoke the original public link. Delete the old public object and verify its URL is no longer serving content. Cached/downloaded copies may remain.
+- Public category `06-personal` is public; include only deliberately shareable personal material.
+- The UI's folder action requires a valid administrator session; it cannot create objects before Blob authorization is properly configured.
 
-## Deployment
-- Current public Vercel project: `knowledge-hub`
-- Current repository: `jorieskolin-creator/Jori-s-Own-Knowledge-Hub`
-- The project's Git integration must be connected explicitly in Vercel; updating GitHub does not itself guarantee an auto-deploy until the link is verified.
-
-## Future
-Automated, approval-gated import from Vercel; metadata-driven catalog rendering; content retrieval for ChatGPT/Codex with scope and authority checks; broken-link checks; revision history.
+## Future improvements
+Durable rate limiting, security verification, UI category-subfolders, richer metadata, content-validation, consistent document version IDs, and automatic alerts when an old public URL is still active.
