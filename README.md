@@ -80,3 +80,12 @@ The current Solutions navigation uses `solution-assurance-concept/` and no longe
 
 ## Consolidated Solution Assurance navigation
 The single **Solution Assurance Concept** folder in the Knowledge Hub UI consolidates documents stored in all three Blob prefixes under `01-solutions/`: `solution-assurance-engine/`, `solution-assurance-documentation-support/`, and `solution-assurance-concept/`. No files are moved or duplicated. Original `pathname` and access level are preserved for later domain-specific consumers. The folder initializer creates only the current `solution-assurance-concept/` prefix; historical prefixes remain valid for discovery.
+
+## MCP retrieval endpoint (initial public-only release)
+A read-only, stateless JSON-RPC / MCP endpoint is deployed at `/api/mcp` using HTTP POST and protocol version `2025-03-26`. Available tools: `list_documents`, `search_documents` (metadata search), `get_document_metadata`, and `get_document` (HTML text extraction). PDF documents are discoverable but currently provide metadata only through `get_document`.
+
+**Security boundary:** This endpoint is deliberately anonymous and exposes **only Public Blob** files inside the six recognized category prefixes. Private Blob files, including their names and paths, are never returned by this endpoint. The authenticated Knowledge Hub website continues to use its separate APIs and can display Private Blob files after login. Root-level Blob files are excluded. All three Solution Assurance Blob folders retain their independent paths while their `display_group` is `Solution Assurance Concept`.
+
+Do **not** extend anonymous tools to Private Blob data. To make Private documents accessible through ChatGPT, build a proper OAuth 2.1-protected MCP service and authorize the connection; a sole-user ChatGPT account is not an authentication mechanism for a publicly reachable endpoint. ChatGPT custom MCP connections may require a supported workspace plan, while Codex can use the same HTTP endpoint as a separate MCP client.
+
+This is a first implementation rather than a completed private knowledge integration: PDF text extraction, semantic/full-text indexing, protected-document OAuth, independent end-to-end MCP client tests, and authorization assurance remain future work.
