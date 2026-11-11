@@ -5,6 +5,7 @@ const {pdfText}=require('./_pdf');
 const {htmlStructure}=require('./_structure');
 const {searchFile,termsOf,MAX_RESULTS,MAX_DOCUMENTS}=require('./_content_search');
 const {assembleEvidence,validateRequest,MODES}=require('./_evidence_package');
+const {discover}=require('./_master_discovery');
 const VERSION='2025-03-26';
 const CATS={
  '01-solutions':'Solutions',
@@ -31,7 +32,7 @@ function metadata(b){
  return {id:'public:'+b.pathname,title:p.at(-1).replace(/\.(?:html?|pdf)$/i,'').replace(/[-_]+/g,' '),
    category:CATS[p[0]],subfolder,display_group:SOLUTION_GROUPS[p[1]]||subfolder||'General',
    access:'public',pathname:b.pathname,mime_type:/\.pdf$/i.test(b.pathname)?'application/pdf':'text/html',
-   updated:b.uploadedAt||null,source_url:b.url};
+   updated:b.uploadedAt||null,size:b.size,source_url:b.url};
 }
 async function entries(){
  let cursor,all=[];
@@ -127,6 +128,35 @@ async function verifyCoverage(args){
   relevant_passages_omitted:report.relevant_passages_omitted,package_truncated:report.package_truncated,
   evidence_sufficiency:'NOT_ASSESSED',verified_absence:false});
 }
+async function discoverSources(args){
+ try{
+  const query=String(args.query||'');termsOf(query);
+  const limit=args.limit===undefined?12:args.limit;
+  const docs=await entries();
+  return result(await discover(query,'public',docs,limit));
+ }catch(e){return fail('Discovery failed: '+(e.message==='Invalid discovery scope'?'Invalid scope':'Review Master Table configuration or request'))}
+}
+async function retrieveTopicEvidence(args){
+ try{
+  const query=String(args.query||'');termsOf(query);
+  const mode=args.mode===undefined?'focused':args.mode;
+  if(!Object.prototype.hasOwnProperty.call(MODES,mode))return fail('Invalid evidence retrieval mode');
+  const docs=await entries();
+  const found=await discover(query,'public',docs,30);
+  const ids=found.candidates.slice(0,4).map(x=>x.id);
+  if(!ids.length)return result({status:'NO_LEXICAL_CANDIDATES',discovery:found,evidence:null,
+   retrieval_quality:'NOT_ASSESSED',verified_absence:false});
+  const selected=ids.map(id=>docs.find(d=>d.id===id));
+  const evidence=await assembleEvidence({query,mode,ids},selected,
+   doc=>get(doc.pathname,{access:'public',storeId:storeId()}));
+  const unexamined=found.candidates_found-ids.length;
+  const discovery_warning=unexamined>0||found.unindexed_count>0||found.stale_count>0;
+  return result({status:'EVIDENCE_PACKAGE_CREATED',discovery:found,
+   selected_ids:ids,additional_candidates_not_examined:unexamined,
+   discovery_coverage_status:discovery_warning?'WARN':'CANDIDATES_EXAMINED',
+   evidence,verified_absence:false});
+ }catch(_e){return fail('Knowledge source discovery or evidence acquisition failed')}
+}
 function result(value){return {content:[{type:'text',text:JSON.stringify(value)}],structuredContent:value,isError:false}}
 function fail(message){return {content:[{type:'text',text:String(message)}],isError:true}}
 const TOOLS=[
@@ -137,6 +167,8 @@ const TOOLS=[
  ,{name:'search_content',description:'Search actual text within 1-4 explicitly selected public PDF/HTML documents. Examines all available PDF pages and HTML sections, returns ranked source-located passages and coverage/gap metadata. Deterministic and read-only; not a whole-library search.',inputSchema:{type:'object',properties:{query:{type:'string',minLength:2,maxLength:200},ids:{type:'array',items:{type:'string'},minItems:1,maxItems:4},limit:{type:'integer',minimum:1,maximum:20}},required:['query','ids'],additionalProperties:false},annotations:{readOnlyHint:true}}
  ,{name:'retrieve_evidence',description:'Assemble a bounded, source-referenced evidence package from 1–4 explicitly selected public HTML/PDF documents. Modes: focused, comparative, comprehensive. Selects lexical matches with context and source coverage diagnostics; cannot verify semantic completeness or factual absence. Read-only.',inputSchema:{type:'object',properties:{query:{type:'string',minLength:2,maxLength:200},ids:{type:'array',items:{type:'string'},minItems:1,maxItems:4},mode:{type:'string',enum:['focused','comparative','comprehensive']}},required:['query','ids'],additionalProperties:false},annotations:{readOnlyHint:true}}
  ,{name:'verify_coverage',description:'Recompute a bounded retrieval-integrity check for 1–4 explicitly selected public documents. Returns source inspection and deterministic quality gate without passage text. Does not verify semantic completeness, factual accuracy or absence. Read-only.',inputSchema:{type:'object',properties:{query:{type:'string',minLength:2,maxLength:200},ids:{type:'array',items:{type:'string'},minItems:1,maxItems:4},mode:{type:'string',enum:['focused','comparative','comprehensive']}},required:['query','ids'],additionalProperties:false},annotations:{readOnlyHint:true}}
+ ,{name:'discover_sources',description:'Search the approved public Master Table summary, terms and themes (with metadata fallback) to find likely documents. Returns candidate IDs, ranking and discovery limitations. No factual absence conclusions.',inputSchema:{type:'object',properties:{query:{type:'string',minLength:2,maxLength:200},limit:{type:'integer',minimum:1,maximum:30}},required:['query'],additionalProperties:false},annotations:{readOnlyHint:true}}
+ ,{name:'retrieve_topic_evidence',description:'Discover relevant public documents from Master Table and automatically acquire a bounded source evidence package from up to 4 best-ranked candidates. Reports candidates not examined; never claims complete domain coverage.',inputSchema:{type:'object',properties:{query:{type:'string',minLength:2,maxLength:200},mode:{type:'string',enum:['focused','comparative','comprehensive']}},required:['query'],additionalProperties:false},annotations:{readOnlyHint:true}}
 
 ];
 async function callTool(name,args){
@@ -154,6 +186,8 @@ async function callTool(name,args){
  if(name==='search_content')return searchContent(args);
  if(name==='retrieve_evidence')return retrieveEvidence(args);
  if(name==='verify_coverage')return verifyCoverage(args);
+ if(name==='discover_sources')return discoverSources(args);
+ if(name==='retrieve_topic_evidence')return retrieveTopicEvidence(args);
  if(name==='get_document'||name==='get_document_metadata'||name==='get_document_structure'){
   const id=String(args.id||'');if(!id.startsWith('public:')||!permitted(id.slice(7)))return fail('Only categorized public document identifiers are allowed');
   const docs=await entries();const doc=docs.find(d=>d.id===id);
