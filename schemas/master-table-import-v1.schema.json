@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Knowledge Hub Master Table — Reviewed JSON Import 1.0",
+  "description": "One record per exact Public/Private document ID. The Admin importer accepts a JSON array or an object with records. Imported source identity/access, hashes and timestamps are NEVER trusted; only descriptive fields are taken. Existing populated entries are preserved. Imported rows are Approved on Save.",
+  "oneOf": [
+    {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "$ref": "#/$defs/record"
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "records"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "records": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "$ref": "#/$defs/record"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "record": {
+      "type": "object",
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 1150
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 220
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 2400
+        },
+        "key_terms": {
+          "type": "array",
+          "maxItems": 40,
+          "items": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "uniqueItems": true
+        },
+        "themes": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "uniqueItems": true
+        },
+        "document_type": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "important_sections": {
+          "type": "array",
+          "maxItems": 60,
+          "items": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "uniqueItems": true
+        },
+        "related_documents": {
+          "type": "array",
+          "maxItems": 30,
+          "items": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "uniqueItems": true
+        },
+        "review_notes": {
+          "type": "string",
+          "maxLength": 6000
+        },
+        "review_version": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "last_reviewed": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "text_extraction": {
+          "type": "string",
+          "enum": [
+            "NOT_ASSESSED",
+            "COMPLETE",
+            "PARTIAL",
+            "FAILED"
+          ]
+        },
+        "visual_inspection": {
+          "type": "string",
+          "enum": [
+            "NOT_ASSESSED",
+            "COMPLETE",
+            "PARTIAL"
+          ]
+        }
+      }
+    }
+  }
+}
