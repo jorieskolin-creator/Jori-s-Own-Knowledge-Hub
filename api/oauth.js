@@ -11,8 +11,8 @@ function validAuth(q){
  if(q.response_type!=='code'||q.code_challenge_method!=='S256')return false;
  if(!/^[A-Za-z0-9_-]{43,128}$/.test(q.code_challenge||''))return false;
  if(typeof q.state!=='string'||q.state.length<8||q.state.length>2048)return false;
- if(q.scope&&q.scope!==SCOPE)return false;
- if(q.resource&&q.resource!==RESOURCE)return false;
+ if(q.scope&&q.scope!==SCOPE&&q.scope!==SCOPE+' offline_access')return false;
+ if(q.resource&&q.resource!==RESOURCE&&q.resource!==BASE)return false;
  return true;
 }
 function redirect(res,url){
@@ -29,7 +29,7 @@ async function authorize(req,res){
   if(!validAuth(q))return html(res,400,'<h2>Invalid authorization request</h2><p>ChatGPT must register a valid OAuth client with a permitted redirect URI and PKCE challenge.</p>');
   const csrf=nonce();
   const request=sign({kind:'authorization',exp:Date.now()+600000,client_id:q.client_id,redirect_uri:q.redirect_uri,
-    state:q.state,challenge:q.code_challenge,scope:SCOPE,resource:RESOURCE,csrf_hash:hash(csrf)});
+    state:q.state,challenge:q.code_challenge,scope:SCOPE,resource:q.resource||RESOURCE,csrf_hash:hash(csrf)});
   res.setHeader('Set-Cookie','__Host-kh_mcp_csrf='+csrf+'; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=600');
   const login=valid(req,'admin');
   let content='<h1>Knowledge Hub · Private</h1><p>ChatGPT is requesting <strong>read-only access</strong> to documents in KnowledgeHub-Private. No upload, modification or deletion permission will be granted.</p>';
@@ -43,10 +43,10 @@ async function authorize(req,res){
  if(!a||b.consent!=='yes'||!safeEqual(hash(readCookie(req,'__Host-kh_mcp_csrf')),a.csrf_hash))
   return html(res,403,'<h2>Authorization request expired or invalid</h2><p>Restart the connection from ChatGPT.</p>');
  const c=client(a.client_id);
- if(!c||!c.redirect_uris.includes(a.redirect_uri)||a.resource!==RESOURCE||a.scope!==SCOPE)return bad(res,'Invalid client or redirect URI');
+ if(!c||!c.redirect_uris.includes(a.redirect_uri)||![RESOURCE,BASE].includes(a.resource)||a.scope!==SCOPE)return bad(res,'Invalid client or redirect URI');
  const code=nonce();
  await createUnique('__mcp-oauth-codes/'+hash(code)+'.json',{client_id:a.client_id,redirect_uri:a.redirect_uri,
-  challenge:a.challenge,resource:RESOURCE,scope:SCOPE,exp:Date.now()+180000});
+  challenge:a.challenge,resource:a.resource,scope:SCOPE,exp:Date.now()+180000});
  const destination=new URL(a.redirect_uri);destination.searchParams.set('code',code);destination.searchParams.set('state',a.state);
  res.setHeader('Set-Cookie','__Host-kh_mcp_csrf=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0');
  return redirect(res,destination.toString());
@@ -75,20 +75,20 @@ async function exchange(req,res){
    return reply(res,400,{error:'invalid_grant'});
   const info=await readState('__mcp-oauth-codes/'+hash(b.code)+'.json');
   if(!info||info.exp<Date.now()||info.client_id!==b.client_id||info.redirect_uri!==b.redirect_uri
-    ||info.resource!==RESOURCE||info.scope!==SCOPE)return reply(res,400,{error:'invalid_grant'});
+    ||![RESOURCE,BASE].includes(info.resource)||info.scope!==SCOPE)return reply(res,400,{error:'invalid_grant'});
   const digest=crypto.createHash('sha256').update(b.code_verifier).digest('base64url');
   if(!safeEqual(digest,info.challenge))return reply(res,400,{error:'invalid_grant'});
-  if(b.resource&&b.resource!==RESOURCE)return reply(res,400,{error:'invalid_target'});
+  if(b.resource&&b.resource!==info.resource)return reply(res,400,{error:'invalid_target'});
   if(!await consumeOnce('code',b.code))return reply(res,400,{error:'invalid_grant'});
-  return reply(res,200,token('admin',b.client_id));
+  return reply(res,200,token('admin',b.client_id,info.resource));
  }
  if(b.grant_type==='refresh_token'){
   const refresh=verify(b.refresh_token,'refresh');
-  if(!refresh||refresh.client_id!==b.client_id||refresh.iss!==BASE||refresh.aud!==RESOURCE||refresh.scope!==SCOPE)
+  if(!refresh||refresh.client_id!==b.client_id||refresh.iss!==BASE||![RESOURCE,BASE].includes(refresh.aud)||refresh.scope!==SCOPE)
    return reply(res,400,{error:'invalid_grant'});
-  if(b.resource&&b.resource!==RESOURCE)return reply(res,400,{error:'invalid_target'});
+  if(b.resource&&b.resource!==refresh.aud)return reply(res,400,{error:'invalid_target'});
   if(!await consumeOnce('refresh',refresh.jti))return reply(res,400,{error:'invalid_grant'});
-  return reply(res,200,token(refresh.sub,b.client_id));
+  return reply(res,200,token(refresh.sub,b.client_id,refresh.aud));
  }
  return reply(res,400,{error:'unsupported_grant_type'});
 }
