@@ -180,3 +180,25 @@ A shared code-level `api/_quality_gate.js` now evaluates every `retrieve_evidenc
 
 ### Step 4 compact verification endpoint
 Both Public and Private MCP now additionally expose `verify_coverage` with the same `query`, `ids`, and `mode` arguments as `retrieve_evidence`. It independently re-examines the authorized source set through the same processing path and returns only the quality gate, per-document inspection manifest, gap/failure details and result counts—not passages. This is a source processing integrity check, not semantic recall, legal assurance, domain-scoring approval or verified absence. It remains read-only and the Private operation requires OAuth.
+
+
+## Step 4.5 — Master Table administration and source discovery (2026-11-11)
+
+An Admin-maintained Master Table is now part of the application. The separately reviewed initial HTML catalog will be converted to JSON and imported later; no initial data is assumed yet.
+
+**Admin interface:** After Admin login, two new controls appear beside Refresh Documents.
+
+- **Update the Master Table:** Reconcile all categorized Public and Private Blob documents into a protected index without replacing existing human edits. New Private documents get only deterministic source fields. New Public documents get deterministic fields, then the UI asks for permission before sequential Public-only AI enrichment. The only AI trigger is an explicit Admin click.
+- **Master Table:** Search/filter entries; edit title, document type, summary, key terms, themes, sections and related documents. Save publishes immediately; no separate approval statuses. Delete removes the index entry, not the original document. Import reviewed JSON accepts either an array of records or an object with a records array, and fills only entries whose descriptive fields remain empty.
+
+**Storage and access:** Source code is in api/_master_table.js and the Admin API in api/master-table.js. The index is stored as _knowledge-system/master-table-v1.json in the PRIVATE Blob store, outside the six document folder categories. The Admin API requires the signed Admin session and same-origin checks for writes. Conditional Blob writes use ifMatch/ETag to prevent stale editing sessions from overwriting newer data. Public and Private descriptions are separated by access scope.
+
+**Public AI enrichment:** api/_master_enrich.js reads Public source text only and uses the OpenAI Responses API with GPT-6.1 Terra and server-side KNOWLEDGE_HUB_API_KEY. The model is instructed to treat source text as untrusted material, return schema-constrained JSON, summarize faithfully in 120–135 words, and extract specific keyword phrases/themes. The validation rejects invalid word counts and insufficient terms instead of manufacturing entries. The model request has store:false. A 350,000-character input budget is marked PARTIAL if reached. AI failures preserve existing entries; existing human edits are not automatically overwritten. Public classification is not itself proof that a particular document is safe to transmit to a remote service; Admin initiation should follow any applicable data restrictions.
+
+**Private content is never transmitted to AI** by this workflow. Its descriptions remain empty until the Admin chooses to edit and save them.
+
+**Source reconciliation:** Existing descriptions persist. Missing Blob sources are marked unavailable for discovery and can be manually removed from the index. Changed-source signatures are flagged for review. Signatures currently represent source ID, upload timestamp and file size rather than a full cryptographic file-content hash.
+
+**MCP integration:** Both Public and Private MCP endpoints now additionally advertise the read-only operations discover_sources and retrieve_topic_evidence. Discovery ranks titles, Master Table summaries, key terms and themes; records without an index entry fall back to metadata. Automatic retrieval selects up to four highest-ranked authorized candidates and invokes the existing evidence package and retrieval quality gates. It reports candidates left unexamined and does not claim verified absence or semantic completeness. Private MCP remains OAuth-protected; Public MCP filters to Public records.
+
+**Operational limitations:** Initial human-reviewed Master Table not imported yet. Authenticated Admin storage CRUD and live AI enrichment still require acceptance tests in the browser using your authorized session; there is no safe way to perform these production actions without it. The Admin login currently lacks durable brute-force protection; production WAF/rate limiting is recommended. Golden Standards remain deferred.
