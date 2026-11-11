@@ -204,3 +204,32 @@ An Admin-maintained Master Table is now part of the application. The separately 
 **Operational limitations:** Initial human-reviewed Master Table not imported yet. Authenticated Admin storage CRUD and live AI enrichment still require acceptance tests in the browser using your authorized session; there is no safe way to perform these production actions without it. The Admin login currently lacks durable brute-force protection; production WAF/rate limiting is recommended. Golden Standards remain deferred.
 
 **Credential safety note (2026-11-11):** A credential value beginning with sk_live_ is typically a Stripe live secret key, not an OpenAI API key. Master Table AI enrichment now rejects Stripe-format keys before any provider request. Replace the environment variable with an OpenAI API key authorized for GPT-6.1 Terra; never paste the full value into chat or the repository. If a real Stripe key was used or exposed, handle it under your provider's rotation policy.
+
+
+## Master Table Format 1.0 — Reviewed HTML compatibility (2026-11-11)
+
+This is an **additive extension** of the existing Master Table operational schema (JSON schema_version remains 1). It matches the five-entry reviewed HTML format, including independent limitations and review provenance. No source document or persisted Master Table data is migrated or imported by the deployment itself.
+
+Schemas:
+- `schemas/master-table-v1.schema.json` — complete persisted index record.
+- `schemas/master-table-import-v1.schema.json` — reviewed initial catalog import (JSON array or object containing `records`). An import row must match an existing source document's exact Public/Private `id`; only editable descriptive fields are imported.
+
+Review fields:
+- `review_notes` — admin-editable description of source scope, unsupported claims, diagrams and exceptions.
+- `review_status` — `Approved` on manual Save or reviewed JSON import; no separate approval workflow. New deterministic-only entries initially have null status.
+- `review_version` — optional human label, e.g. `v1.0`.
+- `last_reviewed` — ISO 8601 timestamp set automatically on manual Save; imported source review date can be preserved when provided as ISO 8601.
+- `text_extraction` — `NOT_ASSESSED`, `COMPLETE`, `PARTIAL` or `FAILED`; does not imply diagrams were examined.
+- `visual_inspection` — `NOT_ASSESSED`, `COMPLETE` or `PARTIAL`; independent of text extraction.
+- `source_metadata_title` — immutable source catalog title, separate from editable `title`.
+- `source_hash` — nullable, reserved for a genuine hash of original file bytes. **Do not substitute `source_signature`** (a metadata-derived upload-time/size signature) for an original file hash.
+
+Source title, source timestamp, source scope, pathname, source signature and content hash are controlled by application source metadata, not trusted from imported JSON. Existing stored records lacking these new fields are read with backward-compatible defaults. The legacy `extraction_status` is maintained for older clients.
+
+Public GPT-6.1 Terra enrichment now records text extraction, unassessed visual inspection and deterministic processing caveats in Review Notes; generated metadata is not automatically labeled as human-reviewed. The Admin Save operation labels it Approved.
+
+Import safety: reviewed human-created JSON may replace **AI-only** fields, but previously manually saved entries (including deliberately empty entries) are preserved. This lets the completed reviewed HTML catalog supersede auto-generated Public descriptions without overwriting later manual revisions. No external source contents are included in the import, and Private material never enters the Public AI workflow.
+
+MCP discovery now returns review notes (bounded) and separate text/visual extraction status with relevant candidates. These are catalog qualifications, **not independent evidence or proof of full document comprehension**. Actual findings remain grounded in the original source retrieval and quality gates.
+
+The initial 5-entry HTML remains a review artifact only. The full table will be imported only after the user supplies the complete reviewed HTML and its conversion to the import schema.
