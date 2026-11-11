@@ -1,6 +1,7 @@
 'use strict';
 const {list,get}=require('@vercel/blob');
 const {Readable}=require('node:stream');
+const {pdfText}=require('./_pdf');
 const VERSION='2025-03-26';
 const CATS={
  '01-solutions':'Solutions',
@@ -40,12 +41,12 @@ function stripHtml(h){
  .replace(/&nbsp;|&#160;/gi,' ').replace(/&amp;/gi,'&').replace(/&lt;/gi,'<').replace(/&gt;/gi,'>')
  .replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'").replace(/[ \t]+/g,' ').replace(/\n\s*\n\s*\n/g,'\n\n').trim();
 }
-async function getContent(doc){
+async function getContent(doc,options={}){
  if(!permitted(doc.pathname)||doc.access!=='public')throw Error('Not permitted');
  const file=await get(doc.pathname,{access:'public',storeId:storeId()});
  if(!file||!file.stream)throw Error('Document not found');
- if(doc.mime_type==='application/pdf')return {text:'PDF text extraction is not enabled in this initial MCP release. Open the source URL to inspect the PDF.',truncated:false,extraction:'metadata-only'};
- if(doc.source_url&&file.size>MAX_BYTES)throw Error('Document exceeds maximum retrieval size');
+ if(doc.mime_type==='application/pdf')return pdfText(file,options);
+ if(file.size>MAX_BYTES)throw Error('Document exceeds maximum retrieval size');
  const chunks=[];let total=0;
  for await(const chunk of Readable.fromWeb(file.stream)){
   total+=chunk.length;
@@ -55,13 +56,14 @@ async function getContent(doc){
  const text=stripHtml(Buffer.concat(chunks).toString('utf8'));
  return {text:text.slice(0,MAX_TEXT),truncated:text.length>MAX_TEXT,extraction:'html-text'};
 }
+
 function result(value){return {content:[{type:'text',text:JSON.stringify(value)}],structuredContent:value,isError:false}}
 function fail(message){return {content:[{type:'text',text:String(message)}],isError:true}}
 const TOOLS=[
  {name:'list_documents',description:'List public Knowledge Hub documents in the six explicit storage categories. Root files and protected documents are excluded.',inputSchema:{type:'object',properties:{category:{type:'string'},subfolder:{type:'string'},limit:{type:'integer',minimum:1,maximum:100}},additionalProperties:false},annotations:{readOnlyHint:true}},
  {name:'search_documents',description:'Search public Knowledge Hub document titles, categories, paths, and display groups. Metadata search only; not full-text.',inputSchema:{type:'object',properties:{query:{type:'string'},limit:{type:'integer',minimum:1,maximum:50}},required:['query'],additionalProperties:false},annotations:{readOnlyHint:true}},
  {name:'get_document_metadata',description:'Fetch source metadata for a public Knowledge Hub document by its public:path identifier.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false},annotations:{readOnlyHint:true}},
- {name:'get_document',description:'Read the text of a public HTML document by public:path identifier. PDF is currently metadata-only. No access to private documents.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false},annotations:{readOnlyHint:true}}
+ {name:'get_document',description:'Read HTML text or PDF text with page numbers, extraction status and an optional PDF page_start/page_end (maximum 10 pages). Returns only Public Blob documents. No modifications.',inputSchema:{type:'object',properties:{id:{type:'string'},page_start:{type:'integer',minimum:1},page_end:{type:'integer',minimum:1}},required:['id'],additionalProperties:false},annotations:{readOnlyHint:true}}
 ];
 async function callTool(name,args){
  if(name==='list_documents'){
@@ -80,7 +82,7 @@ async function callTool(name,args){
   const docs=await entries();const doc=docs.find(d=>d.id===id);
   if(!doc)return fail('Document not found in public catalog');
   if(name==='get_document_metadata')return result(doc);
-  const body=await getContent(doc);return result({...doc,...body});
+  const body=await getContent(doc,args);return result({...doc,...body});
  }
  return fail('Unknown tool');
 }
