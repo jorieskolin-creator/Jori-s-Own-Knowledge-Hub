@@ -134,7 +134,7 @@ test('Opaque origin is accepted only with same-origin fetch metadata, but signed
  assert.doesNotMatch(r.text,/Unauthorized approval origin/);
 });
 
-test('OAuth authorization page CSP permits exact consent form destination only',async()=>{
+test('OAuth authorization CSP permits self submission and registered ChatGPT redirect',async()=>{
  const redirect='https://chatgpt.com/connector/oauth/test';
  const clientId='khc.'+OAuth.sign({kind:'client',redirect_uris:[redirect],exp:Date.now()+300000});
  const q={route:'authorize',client_id:clientId,redirect_uri:redirect,response_type:'code',
@@ -142,7 +142,7 @@ test('OAuth authorization page CSP permits exact consent form destination only',
  const adminCookie='__Host-kh_admin='+sessionSign('admin',1);
  const page=await request(oauthApi,'GET',q,{}, {cookie:adminCookie});
  assert.equal(page.statusCode,200);
- assert.match(page.headers['content-security-policy'],/form-action https:\/\/jori-knowledge-hub\.vercel\.app\/oauth\/authorize;/);
+ assert.match(page.headers['content-security-policy'],/form-action 'self' https:\/\/chatgpt\.com;/);
  assert.doesNotMatch(page.headers['content-security-policy'],/form-action \*/);
  assert.match(page.text,/method="POST" action="\/oauth\/authorize"/);
 });
