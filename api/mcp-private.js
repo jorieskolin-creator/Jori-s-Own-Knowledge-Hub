@@ -82,11 +82,11 @@ async function searchContent(args){
  const matches=[],inspected=[],failures=[];
  const deadline=Date.now()+24000;
  for(const doc of chosen){
-  if(Date.now()>deadline){failures.push({id:doc.id,reason:'Request processing time budget exhausted; document not examined'});continue;}
+  if(Date.now()+1000>=deadline){failures.push({id:doc.id,reason:'Request processing time budget exhausted; document not examined'});continue;}
   try{
    const file=await get(doc.pathname,{access:'private',storeId:storeId()});
    if(!file||!file.stream)throw Error('Document unavailable');
-   const index=await searchFile(file,doc.mime_type,query,MAX_RESULTS);
+   const index=await searchFile(file,doc.mime_type,query,MAX_RESULTS,deadline-Date.now());
    inspected.push({id:doc.id,pathname:doc.pathname,...index.coverage,matching_segments:index.total_matches,
      results_truncated:index.results_truncated});
    matches.push(...index.matches.map(m=>({id:doc.id,title:doc.title,pathname:doc.pathname,...m})));
