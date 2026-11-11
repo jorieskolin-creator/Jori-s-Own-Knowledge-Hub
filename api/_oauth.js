@@ -61,7 +61,7 @@ function secure(res){
  res.setHeader('X-Content-Type-Options','nosniff');
  res.setHeader('Referrer-Policy','no-referrer');
  res.setHeader('X-Frame-Options','DENY');
- res.setHeader('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; form-action https://jori-knowledge-hub.vercel.app/oauth/authorize; frame-ancestors 'none'; base-uri 'none'");
+ res.setHeader('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; form-action 'self' https://chatgpt.com; frame-ancestors 'none'; base-uri 'none'");
 }
 function html(res,status,body){
  secure(res);res.statusCode=status;res.setHeader('Content-Type','text/html; charset=utf-8');
