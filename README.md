@@ -177,3 +177,6 @@ A shared code-level `api/_quality_gate.js` now evaluates every `retrieve_evidenc
 - Lexical search can miss semantically relevant statements, diagrams and scanned pages. Accordingly `relevance_completeness` remains `NOT_VERIFIED` even when technical retrieval integrity is `PASS`.
 - Strict Public/Private store isolation, OAuth protection, read-only document processing, and the absence of external AI providers remain unchanged.
 - Focused automated regression tests were added for valid source anchoring, modified passages, missing documents, output limits and no-match uncertainty. **Golden Standards deliberately remain out of scope.**
+
+### Step 4 compact verification endpoint
+Both Public and Private MCP now additionally expose `verify_coverage` with the same `query`, `ids`, and `mode` arguments as `retrieve_evidence`. It independently re-examines the authorized source set through the same processing path and returns only the quality gate, per-document inspection manifest, gap/failure details and result counts—not passages. This is a source processing integrity check, not semantic recall, legal assurance, domain-scoring approval or verified absence. It remains read-only and the Private operation requires OAuth.
