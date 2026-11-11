@@ -80,3 +80,17 @@ test('Admin-only Master Table UI and API scripts parse correctly',()=>{
   assert.doesNotThrow(()=>new Function(src));
  }
 });
+
+test('Stripe-format secret is rejected before any OpenAI provider request',async()=>{
+ const {callModel}=require('../api/_master_enrich');
+ const previous=process.env.KNOWLEDGE_HUB_API_KEY;
+ process.env.KNOWLEDGE_HUB_API_KEY='sk_live_not_an_openai_key';
+ try{
+  await assert.rejects(
+   ()=>callModel({title:'Public Sample'},{text:'Public sample text',extraction_complete:true}),
+   /Stripe key/);
+ }finally{
+  if(previous===undefined)delete process.env.KNOWLEDGE_HUB_API_KEY;
+  else process.env.KNOWLEDGE_HUB_API_KEY=previous;
+ }
+});
