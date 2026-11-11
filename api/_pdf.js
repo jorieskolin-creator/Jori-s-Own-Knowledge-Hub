@@ -56,7 +56,7 @@ async function pdfText(file,options={}){
  });
  const totalPages=pdf.Pages?.length||0;
  if(totalPages<1)throw Error('PDF page count unavailable');
- if(!structureOnly&&range.start>totalPages)throw new RangeError('Requested page is beyond PDF page count ('+totalPages+')');
+ if(!structureOnly&&!searchAll&&range.start>totalPages)throw new RangeError('Requested page is beyond PDF page count ('+totalPages+')');
  const pages=[];let used=0;let truncated=false;
  const last=(structureOnly||searchAll)?totalPages:Math.min(range.end,totalPages);
  const first=(structureOnly||searchAll)?1:range.start;
