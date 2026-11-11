@@ -43,7 +43,7 @@ function pick(ranked,config,budget){
   const pos=match.page!==null?'p:'+match.page:'s:'+match.section;
   const key=match.id+'|'+pos;
   const already=ranges.get(key)||[];
-  if(already.some(r=>Math.min(r.end,match.end)-Math.max(r.start,match.start)>100))continue;
+  if(already.some(r=>Math.min(r.end,match.end)-Math.max(r.start,match.start)>Math.min(120,(match.end-match.start)*0.4)))continue;
   const text=match.passage.slice(0,budget);
   if(text.length<100&&match.passage.length>=100)break;
   selected.push({...match,passage:text,passage_truncated:match.passage.length>text.length||!match.context_complete});
@@ -79,7 +79,8 @@ async function assembleEvidence(args,docs,openFile){
     ocr_required_pages:coverage.ocr_required_pages||[],
     indexed_sections:coverage.indexed_sections??null,
     indexed_segments:coverage.indexed_segments,
-    matching_segments:matches.total_matches,limitations:coverage.limitations||[]});
+    matching_segments:matches.total_matches,candidate_matches_capped:matches.results_truncated,
+    limitations:coverage.limitations||[]});
    for(const m of matches.matches){
     const expanded=expand(m,index.segments,config.context);
     candidates.push({id:doc.id,title:doc.title,pathname:doc.pathname,
@@ -98,6 +99,7 @@ async function assembleEvidence(args,docs,openFile){
  }
  const packaged=pick([...seed,...remaining],config,config.max_characters);
  const omitted=Math.max(0,candidates.length-packaged.passages.length);
+ const candidateCapReached=sources.some(s=>s.candidate_matches_capped);
  const incomplete=failures.length>0||sources.some(s=>!s.extraction_complete);
  const limitations=[
   'Selection is lexical; relevant concepts expressed using other words may be missed.',
@@ -106,6 +108,7 @@ async function assembleEvidence(args,docs,openFile){
  ];
  if(incomplete)limitations.push('One or more documents or pages could not be fully examined.');
  if(omitted)limitations.push('Additional matching passages were withheld by package limits.');
+ if(candidateCapReached)limitations.push('Candidate match enumeration was capped within at least one source.');
  return {
   request:{query:req.query,mode:req.mode,requested_document_ids:req.ids},
   search_method:'deterministic_lexical_with_context',
@@ -119,7 +122,7 @@ async function assembleEvidence(args,docs,openFile){
   matching_segments_found:candidates.length,
   passages_returned:packaged.passages.length,
   relevant_passages_omitted:omitted,
-  package_truncated:omitted>0||packaged.passages.some(p=>p.passage_truncated),
+  package_truncated:omitted>0||candidateCapReached||packaged.passages.some(p=>p.passage_truncated),
   remaining_character_budget:packaged.remaining_character_budget,
   evidence_sufficiency:'NOT_ASSESSED',
   limitations
