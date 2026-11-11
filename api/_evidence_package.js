@@ -1,6 +1,7 @@
 'use strict';
 // Read-only, deterministic evidence packaging. This is retrieval, not factual verification.
 const {pdfSegments,htmlSegments,searchSegments,termsOf,MAX_DOCUMENTS}=require('./_content_search');
+const {evaluateRetrieval,sha256}=require('./_quality_gate');
 const MODES=Object.freeze({
  focused:{max_passages:6,per_source:3,max_characters:10000,context:300},
  comparative:{max_passages:10,per_source:4,max_characters:18000,context:400},
@@ -26,13 +27,14 @@ function expand(match,segments,context){
  const candidates=segments.filter(s=>s.page===match.page&&s.section===match.section&&
   s.end>=match.start&&s.start<=match.end);
  const base=candidates.find(s=>s.start<=match.start&&s.end>=match.end)||candidates[0];
- if(!base)return {passage:match.passage,start:match.start,end:match.end,context_complete:false};
+ if(!base)return {passage:match.passage,start:match.start,end:match.end,context_complete:false,source_verified:false};
  const center=Math.max(0,match.start-base.start);
  const from=Math.max(0,center-context);
  const length=Math.min(base.text.length-from,900+context*2);
  const passage=base.text.slice(from,from+length);
  return {passage,start:base.start+from,end:base.start+from+passage.length,
-  context_complete:from===0&&from+passage.length===base.text.length};
+  context_complete:from===0&&from+passage.length===base.text.length,
+  source_verified:base.text.slice(from,from+passage.length)===passage&&base.start+from>=0};
 }
 function pick(ranked,config,budget){
  const selected=[],bySource=new Map(),ranges=new Map();
@@ -109,7 +111,7 @@ async function assembleEvidence(args,docs,openFile){
  if(incomplete)limitations.push('One or more documents or pages could not be fully examined.');
  if(omitted)limitations.push('Additional matching passages were withheld by package limits.');
  if(candidateCapReached)limitations.push('Candidate match enumeration was capped within at least one source.');
- return {
+ const result={
   request:{query:req.query,mode:req.mode,requested_document_ids:req.ids},
   search_method:'deterministic_lexical_with_context',
   status:incomplete?'PARTIAL_EXTRACTION':candidates.length===0?'NO_LEXICAL_MATCH':'MATCHES_FOUND',
@@ -118,7 +120,8 @@ async function assembleEvidence(args,docs,openFile){
   source_extraction_complete:!incomplete,
   source_coverage:sources,failures,
   passages:packaged.passages.map(({source_order,context_complete,...p},n)=>({...p,
-   passage_id:'E'+String(n+1).padStart(3,'0'),context_complete})),
+   passage_id:'E'+String(n+1).padStart(3,'0'),context_complete,
+   source_sha256:sha256(p.id+'|'+(p.page??'')+'|'+(p.section??'')+'|'+p.start+'|'+p.passage)})),
   matching_segments_found:candidates.length,
   passages_returned:packaged.passages.length,
   relevant_passages_omitted:omitted,
@@ -127,5 +130,7 @@ async function assembleEvidence(args,docs,openFile){
   evidence_sufficiency:'NOT_ASSESSED',
   limitations
  };
+ result.retrieval_quality=evaluateRetrieval(result);
+ return result;
 }
 module.exports={assembleEvidence,validateRequest,MODES,pick,expand};
