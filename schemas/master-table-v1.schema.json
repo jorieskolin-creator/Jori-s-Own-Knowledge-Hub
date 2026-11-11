@@ -1,0 +1,230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Knowledge Hub Master Table — Operational Format 1.0",
+  "description": "Administrative discovery metadata, not primary evidence. Public/Private access is enforced separately in application code. Save marks a record Approved.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "records"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "updated_at": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "records": {
+      "type": "array",
+      "maxItems": 5000,
+      "items": {
+        "$ref": "#/$defs/record"
+      }
+    }
+  },
+  "$defs": {
+    "record": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "access",
+        "pathname",
+        "title",
+        "summary",
+        "key_terms",
+        "themes",
+        "text_extraction",
+        "visual_inspection",
+        "review_notes",
+        "review_status"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 1150
+        },
+        "access": {
+          "type": "string",
+          "enum": [
+            "public",
+            "private"
+          ]
+        },
+        "pathname": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 220
+        },
+        "source_metadata_title": {
+          "type": "string",
+          "maxLength": 220
+        },
+        "category": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "folder": {
+          "type": "string",
+          "maxLength": 1024
+        },
+        "mime_type": {
+          "type": "string",
+          "enum": [
+            "text/html",
+            "application/pdf"
+          ]
+        },
+        "source_updated": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_size": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "source_signature": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "source_hash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "source_available": {
+          "type": "boolean"
+        },
+        "source_changed": {
+          "type": "boolean"
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 2400
+        },
+        "key_terms": {
+          "type": "array",
+          "maxItems": 40,
+          "items": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "uniqueItems": true
+        },
+        "themes": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "uniqueItems": true
+        },
+        "document_type": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "important_sections": {
+          "type": "array",
+          "maxItems": 60,
+          "items": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "uniqueItems": true
+        },
+        "related_documents": {
+          "type": "array",
+          "maxItems": 30,
+          "items": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "uniqueItems": true
+        },
+        "review_notes": {
+          "type": "string",
+          "maxLength": 6000
+        },
+        "review_status": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "Approved",
+            null
+          ]
+        },
+        "review_version": {
+          "type": "string",
+          "maxLength": 50
+        },
+        "last_reviewed": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "text_extraction": {
+          "type": "string",
+          "enum": [
+            "NOT_ASSESSED",
+            "COMPLETE",
+            "PARTIAL",
+            "FAILED"
+          ]
+        },
+        "visual_inspection": {
+          "type": "string",
+          "enum": [
+            "NOT_ASSESSED",
+            "COMPLETE",
+            "PARTIAL"
+          ]
+        },
+        "extraction_status": {
+          "type": "string",
+          "enum": [
+            "NOT_INSPECTED",
+            "COMPLETE",
+            "PARTIAL",
+            "FAILED",
+            "MANUAL"
+          ]
+        },
+        "enrichment": {
+          "type": "string",
+          "enum": [
+            "NONE",
+            "AI",
+            "MANUAL"
+          ]
+        },
+        "last_saved": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}
