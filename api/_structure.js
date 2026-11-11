@@ -12,18 +12,18 @@ async function htmlStructure(file){
  }
  const markup=Buffer.concat(chunks).toString('utf8');
  const cleaned=markup.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi,' ').replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi,' ');
- const headings=[];
+ const headings=[];let headingsTruncated=false;
  const tags=/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1\s*>/gi;
  let match;
  while((match=tags.exec(cleaned))!==null){
   const value=match[2].replace(/<[^>]*>/g,' ').replace(/&nbsp;|&#160;/gi,' ').replace(/&amp;/gi,'&')
    .replace(/&lt;/gi,'<').replace(/&gt;/gi,'>').replace(/\s+/g,' ').trim();
   if(value)headings.push({level:Number(match[1]),heading:value.slice(0,250),source_offset:match.index});
-  if(headings.length>=500)break;
+  if(headings.length>=500){headingsTruncated=true;break;}
  }
  const text=cleaned.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
  return {document_type:'html',extraction:'html-text',extraction_complete:true,
-  structure_complete:!tags.test(cleaned),headings,heading_count:headings.length,
+  structure_complete:!headingsTruncated,headings,heading_count:headings.length,
   extracted_characters:text.length,source_bytes:bytes,
   notes:'HTML text was inspected. Heading positions are source markup offsets, not page numbers.'};
 }
