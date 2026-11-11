@@ -118,6 +118,16 @@ async function retrieveEvidence(args){
  const output=await assembleEvidence(request,documents,doc=>get(doc.pathname,{access:'private',storeId:storeId()}));
  return result(output);
 }
+async function verifyCoverage(args){
+ const existing=await retrieveEvidence(args);
+ if(existing.isError)return existing;
+ const report=existing.structuredContent;
+ return result({request:report.request,retrieval_quality:report.retrieval_quality,
+  source_coverage:report.source_coverage,failures:report.failures,
+  passages_returned:report.passages_returned,matching_segments_found:report.matching_segments_found,
+  relevant_passages_omitted:report.relevant_passages_omitted,package_truncated:report.package_truncated,
+  evidence_sufficiency:'NOT_ASSESSED',verified_absence:false});
+}
 function result(value){return {content:[{type:'text',text:JSON.stringify(value)}],structuredContent:value,isError:false}}
 function fail(message){return {content:[{type:'text',text:String(message)}],isError:true}}
 const TOOLS=[
@@ -127,6 +137,7 @@ const TOOLS=[
  {name:'get_document',description:'Read HTML text or PDF text with page numbers, extraction status and an optional PDF page_start/page_end (maximum 10 pages). Requires OAuth and returns only Private Blob documents. No modifications.',inputSchema:{type:'object',properties:{id:{type:'string'},page_start:{type:'integer',minimum:1},page_end:{type:'integer',minimum:1}},required:['id'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]} ,{name:'get_document_structure',description:'Inspect the complete Private document on demand and report page/heading structure, extraction coverage, OCR gaps and processing limits without returning full source text.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]}
  ,{name:'search_content',description:'Search actual text within 1-4 explicitly selected private PDF/HTML documents. Examines all available PDF pages and HTML sections, returns ranked source-located passages and coverage/gap metadata. Deterministic and read-only; not a whole-library search.',inputSchema:{type:'object',properties:{query:{type:'string',minLength:2,maxLength:200},ids:{type:'array',items:{type:'string'},minItems:1,maxItems:4},limit:{type:'integer',minimum:1,maximum:20}},required:['query','ids'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]}
  ,{name:'retrieve_evidence',description:'Assemble a bounded, source-referenced evidence package from 1–4 explicitly selected private HTML/PDF documents. Modes: focused, comparative, comprehensive. Selects lexical matches with context and source coverage diagnostics; cannot verify semantic completeness or factual absence. Read-only.',inputSchema:{type:'object',properties:{query:{type:'string',minLength:2,maxLength:200},ids:{type:'array',items:{type:'string'},minItems:1,maxItems:4},mode:{type:'string',enum:['focused','comparative','comprehensive']}},required:['query','ids'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]}
+ ,{name:'verify_coverage',description:'Recompute a bounded retrieval-integrity check for 1–4 explicitly selected private documents. Returns source inspection and deterministic quality gate without passage text. Does not verify semantic completeness, factual accuracy or absence. Read-only.',inputSchema:{type:'object',properties:{query:{type:'string',minLength:2,maxLength:200},ids:{type:'array',items:{type:'string'},minItems:1,maxItems:4},mode:{type:'string',enum:['focused','comparative','comprehensive']}},required:['query','ids'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]}
 
 ];
 async function callTool(name,args){
@@ -143,6 +154,7 @@ async function callTool(name,args){
  }
  if(name==='search_content')return searchContent(args);
  if(name==='retrieve_evidence')return retrieveEvidence(args);
+ if(name==='verify_coverage')return verifyCoverage(args);
  if(name==='get_document'||name==='get_document_metadata'||name==='get_document_structure'){
   const id=String(args.id||'');if(!id.startsWith('private:')||!permitted(id.slice(8)))return fail('Only categorized private document identifiers are allowed');
   const docs=await entries();const doc=docs.find(d=>d.id===id);
