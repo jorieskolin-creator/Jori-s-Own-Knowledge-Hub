@@ -146,3 +146,21 @@ test('OAuth authorization CSP permits self submission and registered ChatGPT red
  assert.doesNotMatch(page.headers['content-security-policy'],/form-action \*/);
  assert.match(page.text,/method="POST" action="\/oauth\/authorize"/);
 });
+
+test('Private MCP advertises read-only document structure inspection under OAuth',async()=>{
+ const res=await request(privateMcp,'POST',{}, {jsonrpc:'2.0',id:33,method:'tools/list'});
+ assert.equal(res.statusCode,200);
+ const declared=JSON.parse(res.text).result.tools;
+ const tool=declared.find(t=>t.name==='get_document_structure');
+ assert.ok(tool);
+ assert.equal(tool.annotations.readOnlyHint,true);
+ assert.equal(tool.securitySchemes[0].type,'oauth2');
+ assert.deepEqual(tool.inputSchema.required,['id']);
+});
+test('Private document structure requires authorization',async()=>{
+ const res=await request(privateMcp,'POST',{}, {jsonrpc:'2.0',id:34,method:'tools/call',
+  params:{name:'get_document_structure',arguments:{id:'private:01-solutions/cscf-demo/Secure Software Development Process_V1.0A.pdf'}}});
+ const out=JSON.parse(res.text).result;
+ assert.equal(out.isError,true);
+ assert.match(out.content[0].text,/Authorization required/);
+});
