@@ -94,3 +94,81 @@ test('Stripe-format secret is rejected before any OpenAI provider request',async
   else process.env.KNOWLEDGE_HUB_API_KEY=previous;
  }
 });
+
+test('Master Table Format 1.0 contains exact reviewed HTML fields',()=>{
+ const schema=require('../schemas/master-table-v1.schema.json');
+ const imp=require('../schemas/master-table-import-v1.schema.json');
+ const fields=['review_notes','review_status','review_version','last_reviewed',
+  'text_extraction','visual_inspection','source_metadata_title','source_hash'];
+ for(const field of fields)assert.ok(schema.$defs.record.properties[field],field);
+ for(const field of ['review_notes','review_version','last_reviewed','text_extraction','visual_inspection'])
+  assert.ok(imp.$defs.record.properties[field],field);
+ assert.equal(schema.$defs.record.properties.review_status.enum[0],'Approved');
+ assert.equal(schema.$defs.record.properties.source_hash.type[1],'null');
+});
+test('New records separate actual content hashes from metadata-only signatures',()=>{
+ const doc=entryFromDoc({id:'public:02-frameworks/Example.pdf',access:'public',
+  pathname:'02-frameworks/Example.pdf',title:'Example',mime_type:'application/pdf',
+  updated:'2026-11-10T10:00:00Z',size:123});
+ assert.equal(doc.source_hash,null);
+ assert.match(doc.source_signature,/^[0-9a-f]{64}$/);
+ assert.equal(doc.source_metadata_title,'Example');
+ assert.equal(doc.text_extraction,'NOT_ASSESSED');
+ assert.equal(doc.visual_inspection,'NOT_ASSESSED');
+ assert.equal(doc.review_status,null);
+ assert.equal(doc.last_reviewed,null);
+});
+test('Saving approved manual descriptions preserves all reviewed HTML v1.0 information',()=>{
+ const {withReviewFields}=require('../api/_master_table');
+ const d=entryFromDoc(doc('private','Review'));
+ const updated=normalizeEdit(d,{
+  title:'Main heading distinct from metadata title',
+  summary:'The document reports a finding; the finding was not independently replicated.',
+  key_terms:['governance','risk'],themes:['assurance'],
+  review_notes:'PDF text was read; figures were not independently inspected.',
+  review_version:'v1.0',text_extraction:'Complete',visual_inspection:'Not assessed'
+ });
+ assert.equal(updated.review_status,'Approved');
+ assert.ok(Date.parse(updated.last_reviewed)>0);
+ assert.equal(updated.review_version,'v1.0');
+ assert.equal(updated.review_notes,'PDF text was read; figures were not independently inspected.');
+ assert.equal(updated.text_extraction,'COMPLETE');
+ assert.equal(updated.visual_inspection,'NOT_ASSESSED');
+ assert.equal(updated.extraction_status,'COMPLETE');
+ assert.equal(updated.source_metadata_title,'Review'); // Deterministic source name
+ assert.equal(updated.title,'Main heading distinct from metadata title');
+ assert.equal(withReviewFields(updated).summary,updated.summary);
+});
+test('AI enrichment does not falsely record a manual review approval',()=>{
+ const d=entryFromDoc(doc('public','Architecture'));
+ const e=normalizeEdit(d,{summary:'Generated public discovery description',enrichment:'AI',
+   text_extraction:'PARTIAL',visual_inspection:'NOT_ASSESSED',
+   review_notes:'Extractable text only; visual inspection not assessed.'},{markApproved:false});
+ assert.equal(e.enrichment,'AI');
+ assert.equal(e.review_status,null);
+ assert.equal(e.last_reviewed,null);
+ assert.equal(e.text_extraction,'PARTIAL');
+ assert.match(e.review_notes,/visual inspection/);
+});
+test('Initial JSON import can preserve its existing approved review date',()=>{
+ const d=entryFromDoc(doc('private','Risk Review'));
+ const e=normalizeEdit(d,{review_version:'v1.0',review_notes:'Complete text; visuals not assessed.'},
+  {reviewedAt:'2026-11-11T14:41:00.000Z'});
+ assert.equal(e.review_status,'Approved');
+ assert.equal(e.last_reviewed,'2026-11-11T14:41:00.000Z');
+ assert.throws(()=>normalizeEdit(d,{}, {reviewedAt:'an invalid time'}),/Invalid last reviewed/);
+});
+test('Legacy Master Table records gain fields without losing existing summaries',()=>{
+ const {withReviewFields}=require('../api/_master_table');
+ const legacy=entryFromDoc(doc('public','Legacy'));
+ legacy.summary='An existing approved descriptive summary';
+ delete legacy.text_extraction;delete legacy.visual_inspection;
+ delete legacy.review_notes;delete legacy.source_metadata_title;
+ legacy.extraction_status='COMPLETE';
+ const upgraded=withReviewFields(legacy);
+ assert.equal(upgraded.summary,legacy.summary);
+ assert.equal(upgraded.text_extraction,'COMPLETE');
+ assert.equal(upgraded.visual_inspection,'NOT_ASSESSED');
+ assert.equal(upgraded.review_notes,'');
+ assert.equal(upgraded.source_metadata_title,'Legacy');
+});
