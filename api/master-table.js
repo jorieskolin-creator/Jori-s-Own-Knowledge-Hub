@@ -79,7 +79,10 @@ async function importEntries(res,body){
   const i=table.records.findIndex(e=>e.id===row.id);
   if(i<0){skipped++;continue}
   const existing=table.records[i];
-  if(existing.summary||existing.key_terms?.length||existing.themes?.length){skipped++;continue;}
+  // Explicitly imported human-reviewed records take precedence over AI-only metadata.
+  // Preserve any entry the administrator has previously saved manually.
+  if((existing.summary||existing.key_terms?.length||existing.themes?.length)&&
+     existing.enrichment!=='AI'){skipped++;continue;}
   const changes={};
   for(const k of ['title','summary','key_terms','themes','document_type','important_sections','related_documents',
    'review_notes','review_version','text_extraction','visual_inspection'])
@@ -89,7 +92,8 @@ async function importEntries(res,body){
   table.records[i]=normalizeEdit(existing,changes,{reviewedAt:row.last_reviewed??undefined});modified++;
  }
  if(modified)await writeMaster(table,etag);
- return send(res,200,{imported:modified,skipped,existing_entries_preserved:true});
+ return send(res,200,{imported:modified,skipped,
+  manually_maintained_entries_preserved:true,ai_only_entries_may_be_replaced:true});
 }
 module.exports=async function(req,res){
  res.setHeader('Cache-Control','no-store');
