@@ -156,7 +156,7 @@
   const input=byId('mtJsonFile');if(!input.files.length)return;
   try{const data=JSON.parse(await input.files[0].text()),records=Array.isArray(data)?data:data.records;
    if(!Array.isArray(records))throw Error('Expected JSON array or an object with records');
-   if(!confirm('Import '+records.length+' reviewed records? Existing populated descriptions will be preserved.'))return;
+   if(!confirm('Import '+records.length+' reviewed records? Manually saved entries will be preserved; reviewed records may replace AI-only descriptions.'))return;
    const out=await request('import',{records,expected_etag:state.etag});
    await load();message('Imported '+out.imported+' entries; skipped '+out.skipped+'.');
   }catch(e){message('Import failed: '+e.message,true)}finally{input.value=''}
