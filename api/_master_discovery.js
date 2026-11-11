@@ -36,7 +36,13 @@ async function discover(query,scope,docs,limit=12,indexOverride=null){
   const v=relevance(query,entry);
   if(v)found.push({id:d.id,title:entry.title||d.title,pathname:d.pathname,
    source_kind:r?'master_table':'metadata_fallback',summary_available:!!r?.summary,
-   key_terms_available:!!r?.key_terms?.length,score:v.score,matching_terms:v.matching_terms});
+   key_terms_available:!!r?.key_terms?.length,
+   document_type:r?.document_type||null,
+   review_status:r?.review_status||null,
+   text_extraction:r?.text_extraction||null,
+   visual_inspection:r?.visual_inspection||null,
+   review_notes:r?.review_notes?.slice(0,900)||null,
+   score:v.score,matching_terms:v.matching_terms});
  }
  found.sort((a,b)=>b.score-a.score||a.pathname.localeCompare(b.pathname));
  return {query,scope,discovery_method:'approved_master_table_with_metadata_fallback',
