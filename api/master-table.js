@@ -44,7 +44,7 @@ async function sync(res){
  const merged=reconcile(table,documents,healthy);
  if(JSON.stringify(merged.table.records)!==JSON.stringify(table.records))await writeMaster(merged.table,etag);
  const pending_public=merged.table.records.filter(e=>e.access==='public'&&e.source_available&&
-  !e.summary&&!e.source_changed).map(e=>e.id);
+  !e.summary&&e.enrichment==='NONE'&&!(e.key_terms||[]).length&&!(e.themes||[]).length&&!e.source_changed).map(e=>e.id);
  return send(res,200,{added:merged.added,changed:merged.changed,unavailable:merged.missing,
   pending_public,source_count:documents.length,total_entries:merged.table.records.length,
   warnings:failures,ai_used:false});
@@ -59,7 +59,8 @@ async function enrich(res,body){
  const doc=table.records[idx];
  if(doc.access!=='public'||!doc.source_available||doc.source_changed)
   return send(res,409,{error:'Public source is unavailable or changed; update inventory first'});
- if(doc.summary)return send(res,409,{error:'Existing summary is preserved; edit it manually'});
+ if(doc.summary||doc.enrichment!=='NONE'||doc.key_terms?.length||doc.themes?.length)
+  return send(res,409,{error:'Existing manually maintained content is preserved; edit it in Master Table'});
  const data=await extractPublic(doc);const enrichment=await callModel(doc,data);
  table.records[idx]=normalizeEdit(doc,enrichment);
  table.records[idx].enrichment='AI';
