@@ -95,4 +95,4 @@ $('logout').onclick=async()=>{try{await api('/api/logout',{method:'POST'})}final
 $('q').oninput=draw;$('refresh').onclick=refresh;
 $('initialize').onclick=async()=>{if(!confirm('Create six category prefixes and seven Solutions subfolder prefixes in each available Blob store? This writes .folder placeholders.'))return;$('initialize').disabled=true;try{const r=await api('/api/initialize-folders',{method:'POST'});msg('Created '+r.created+' of '+r.expected+' folder placeholders. '+(r.errors?.length?r.errors.join('; '):''),!!r.errors?.length)}catch(e){msg(e.message,true)}finally{$('initialize').disabled=false}};
 (async()=>{try{const r=await api('/api/session');if(r.authenticated){showApp();await refresh()}else showLogin()}catch{showLogin()}})();
-</script></body></html>
+</script><script src="/master-table.js" defer></script></body></html>
