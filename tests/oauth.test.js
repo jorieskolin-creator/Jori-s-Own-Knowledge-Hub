@@ -53,7 +53,7 @@ test('Private MCP only lists tool schemas without authentication',async()=>{
  assert.equal(init.statusCode,200);
  const tools=await request(privateMcp,'POST',{}, {jsonrpc:'2.0',id:2,method:'tools/list'});
  const data=JSON.parse(tools.text);
- assert.equal(data.result.tools.length,6);
+ assert.equal(data.result.tools.length,7);
  assert.ok(data.result.tools.every(t=>t.securitySchemes?.[0]?.type==='oauth2'));
 });
 test('Unauthenticated private document call never returns document data',async()=>{
@@ -178,4 +178,21 @@ test('Private content search rejects unauthorized calls before reading Blob',asy
  const res=await request(privateMcp,'POST',{}, {jsonrpc:'2.0',id:53,method:'tools/call',params:{
   name:'search_content',arguments:{query:'security',ids:['private:01-solutions/cscf-demo/Secure Software Development Process_V1.0A.pdf']}}});
  assert.match(JSON.parse(res.text).result.content[0].text,/Authorization required/);
+});
+
+test('Private evidence package is declared read-only with OAuth authorization',async()=>{
+ const r=await request(privateMcp,'POST',{}, {jsonrpc:'2.0',id:64,method:'tools/list'});
+ const tools=JSON.parse(r.text).result.tools;
+ const found=tools.find(t=>t.name==='retrieve_evidence');
+ assert.ok(found);
+ assert.equal(found.annotations.readOnlyHint,true);
+ assert.equal(found.securitySchemes[0].type,'oauth2');
+ assert.deepEqual(found.inputSchema.required,['query','ids']);
+});
+test('Unauthenticated private evidence package cannot inspect source material',async()=>{
+ const r=await request(privateMcp,'POST',{}, {jsonrpc:'2.0',id:65,method:'tools/call',params:{
+  name:'retrieve_evidence',arguments:{query:'security controls',ids:['private:01-solutions/cscf-demo/Secure Software Development Process_V1.0A.pdf'],mode:'focused'}}});
+ const payload=JSON.parse(r.text).result;
+ assert.equal(payload.isError,true);
+ assert.match(payload.content[0].text,/Authorization required/);
 });
