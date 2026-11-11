@@ -119,3 +119,6 @@ The server uses its existing `SESSION_SECRET` for signing, and writes authorizat
 - HTML documents are available as extracted text (up to 60,000 characters); PDF content is currently metadata-only.
 - OAuth-state blobs use expiry and replay markers; maintain and monitor Blob usage and storage permissions.
 - The `tests/oauth.test.js` security regression tests run using `npm test` and the GitHub Actions workflow `.github/workflows/mcp-tests.yml`.
+
+### OAuth consent repair (2026-11-11)
+A reported `Authorization request expired or invalid` on approving the ChatGPT Private connection prompted two repairs: the consent GET now preserves a valid CSRF cookie rather than rotating it on every refresh (which previously broke concurrent/reloaded forms), and the OAuth form decoder handles URL-encoded text, JSON and Buffer inputs. The POST response distinguishes missing form, expired/invalid signature, missing/mismatched CSRF cookie and missing approval, without emitting secrets. Tests cover cookie stability and parsing. Authorization still requires a valid admin session, signed request, explicit consent and matching CSRF cookie. These changes do not bypass OAuth or expose Private documents anonymously. Recreate a fresh ChatGPT authorization attempt after deployment. The full browser approval plus Blob token exchange still requires an end-to-end interactive test.
