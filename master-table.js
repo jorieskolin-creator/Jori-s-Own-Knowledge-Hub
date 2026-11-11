@@ -8,7 +8,7 @@
  '.mt-header h2{margin:0;flex:1}.mt-tools input{min-width:180px;flex:1}.mt-tools button{font-size:12px}.mt-main{display:grid;grid-template-columns:53% 47%;height:calc(100% - 185px)}'+
  '.mt-list,.mt-editor{overflow:auto;padding:12px}.mt-list{border-right:1px solid #e1e8ef}.mt-list table{width:100%;border-collapse:collapse;font-size:12px}'+
  '.mt-list td,.mt-list th{padding:9px;border-bottom:1px solid #e1e8ef;text-align:left;vertical-align:top}.mt-list tr{cursor:pointer}'+
- '.mt-list tr:hover,.mt-selected{background:#e7f5ed}.mt-editor label{font-size:12px;font-weight:bold;display:block;margin-top:10px}.mt-editor textarea,.mt-editor input{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font:13px system-ui}'+
+ '.mt-list tr:hover,.mt-selected{background:#e7f5ed}.mt-editor label{font-size:12px;font-weight:bold;display:block;margin-top:10px}.mt-editor textarea,.mt-editor input,.mt-editor select{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font:13px system-ui}'+
  '.mt-editor textarea{min-height:90px;resize:vertical}.mt-actions{display:flex;justify-content:flex-end;gap:10px;padding:13px 0}.mt-msg{padding:8px 20px;font-size:12px;color:#475569;min-height:32px}'+
  '.mt-error{color:#b42318}.mt-small{color:#64748b;font-size:11px}.mt-preview{color:#617085;line-height:1.4}.mt-editor input[readonly]{background:#eef2f6}'+
  '@media(max-width:820px){.mt-main{display:block;height:65vh;overflow:auto}.mt-list,.mt-editor{max-height:45vh;border-right:0;border-bottom:1px solid #e1e8ef}}';
@@ -43,6 +43,12 @@
   const input=document.createElement(multi?'textarea':'input');input.value=value??'';
   if(!multi)input.type='text';input.readOnly=readonly;parent.append(input);return input;
  }
+ function choice(parent,label,value,options){
+  parent.append(node('label',label));
+  const select=document.createElement('select');
+  for(const [key,title] of options){const o=document.createElement('option');o.value=key;o.textContent=title;select.append(o);}
+  select.value=value??options[0][0];parent.append(select);return select;
+ }
  function values(s){return String(s).split(/[\n,]/g).map(x=>x.trim()).filter(Boolean)}
  function edit(){
   const host=byId('mtEditor');host.replaceChildren();
@@ -52,23 +58,38 @@
   host.append(node('p',item.access+' · '+item.category+' · '+(item.source_available?'Source available':'SOURCE MISSING'),'mt-small'));
   if(item.source_changed)host.append(node('p','Source fingerprint changed. Review the replacement document before saving.','mt-error'));
   field(host,'Source ID (not editable)',item.id,false,true);
+  field(host,'Source metadata title (deterministic, not editable)',item.source_metadata_title||'',false,true);
+  field(host,'Source hash (verified original bytes, if available)',item.source_hash||'Not available',false,true);
   const title=field(host,'Display title',item.title,false);
   const type=field(host,'Document type',item.document_type,false);
   const summary=field(host,'Summary (120–135 words)',item.summary,true);
   const count=node('div',wordCount(summary.value)+' words','mt-small');host.append(count);
   summary.oninput=()=>count.textContent=wordCount(summary.value)+' words · target 120–135';
-  const terms=field(host,'Key terms (comma separated, target 15–25)',(item.key_terms||[]).join(', '),true);
+  const terms=field(host,'Key terms (comma separated, 12–25 meaningful terms)',(item.key_terms||[]).join(', '),true);
   const themes=field(host,'Themes (comma separated, target 5–10)',(item.themes||[]).join(', '),true);
   const sections=field(host,'Important sections (one per line)',(item.important_sections||[]).join('\n'),true);
   const relations=field(host,'Related documents (one per line)',(item.related_documents||[]).join('\n'),true);
-  host.append(node('p','Extraction: '+(item.extraction_status||'NOT_INSPECTED')+' · Last saved: '+(item.last_saved||'not yet'),'mt-small'));
+  const notes=field(host,'Review notes — scope, limitations, claims and exceptions',item.review_notes||'',true);
+  const textCoverage=choice(host,'Text extraction',item.text_extraction||'NOT_ASSESSED',[
+   ['NOT_ASSESSED','Not assessed'],['COMPLETE','Complete'],['PARTIAL','Partial'],['FAILED','Failed']
+  ]);
+  const visualCoverage=choice(host,'Visual inspection',item.visual_inspection||'NOT_ASSESSED',[
+   ['NOT_ASSESSED','Not assessed'],['COMPLETE','Complete'],['PARTIAL','Partial']
+  ]);
+  const version=field(host,'Review version (optional)',item.review_version||'',false);
+  field(host,'Review status (Save = Approved)',item.review_status||'Not saved yet',false,true);
+  field(host,'Last reviewed (recorded on Save)',item.last_reviewed||'Not yet reviewed',false,true);
+  host.append(node('p','Source last updated: '+(item.source_updated||'unknown')+
+   ' · Last saved: '+(item.last_saved||'not yet'),'mt-small'));
   const actions=node('div',undefined,'mt-actions'),save=node('button','Save changes','primary'),remove=node('button','Delete entry','secondary');
   actions.append(remove,save);host.append(actions);
   save.onclick=async()=>{
    save.disabled=true;
    try{
     const changes={title:title.value,document_type:type.value,summary:summary.value,key_terms:values(terms.value),
-     themes:values(themes.value),important_sections:values(sections.value),related_documents:values(relations.value)};
+     themes:values(themes.value),important_sections:values(sections.value),related_documents:values(relations.value),
+     review_notes:notes.value,text_extraction:textCoverage.value,visual_inspection:visualCoverage.value,
+     review_version:version.value};
     const out=await request('save',{id:item.id,expected_etag:state.etag,changes});
     await load(item.id);message('Saved and published. Summary: '+out.quality.summary_words+' words.');
    }catch(e){message(e.message,true)}finally{save.disabled=false}
@@ -84,7 +105,8 @@
   const host=byId('mtRows');host.replaceChildren();
   const q=byId('mtSearch').value.trim().toLowerCase(),scope=byId('mtScope').value;
   const filtered=state.records.filter(r=>(scope==='all'||r.access===scope)&&
-   [r.title,r.pathname,r.summary,...(r.key_terms||[]),...(r.themes||[])].join(' ').toLowerCase().includes(q));
+   [r.title,r.source_metadata_title,r.pathname,r.document_type,r.summary,r.review_notes,
+    ...(r.important_sections||[]),...(r.key_terms||[]),...(r.themes||[])].join(' ').toLowerCase().includes(q));
   byId('mtCount').textContent=filtered.length+' / '+state.records.length+' entries';
   for(const r of filtered){
    const tr=document.createElement('tr');if(r.id===state.selected)tr.className='mt-selected';
@@ -92,7 +114,9 @@
    const access=node('td',r.access);if(!r.source_available)access.append(node('div','Unavailable','mt-error'));
    if(r.source_changed)access.append(node('div','Changed','mt-error'));
    const details=node('td');details.append(node('div',r.summary?.slice(0,150)||'(No summary yet)','mt-preview'),
-    node('div',(r.key_terms?.length||0)+' terms · '+(r.themes?.length||0)+' themes','mt-small'));
+    node('div',(r.key_terms?.length||0)+' terms · '+(r.themes?.length||0)+' themes · '+
+     (r.review_status||'not saved')+' · Text: '+(r.text_extraction||'not assessed')+
+     ' · Visual: '+(r.visual_inspection||'not assessed'),'mt-small'));
    tr.append(name,access,details);
    tr.onclick=()=>{state.selected=r.id;render();edit()};host.append(tr);
   }
