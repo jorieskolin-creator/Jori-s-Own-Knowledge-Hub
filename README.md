@@ -88,4 +88,34 @@ A read-only, stateless JSON-RPC / MCP endpoint is deployed at `/api/mcp` using H
 
 Do **not** extend anonymous tools to Private Blob data. To make Private documents accessible through ChatGPT, build a proper OAuth 2.1-protected MCP service and authorize the connection; a sole-user ChatGPT account is not an authentication mechanism for a publicly reachable endpoint. ChatGPT custom MCP connections may require a supported workspace plan, while Codex can use the same HTTP endpoint as a separate MCP client.
 
-This is a first implementation rather than a completed private knowledge integration: PDF text extraction, semantic/full-text indexing, protected-document OAuth, independent end-to-end MCP client tests, and authorization assurance remain future work.
+This Public endpoint remains anonymous and unchanged. PDF text extraction and semantic/full-text indexing are still future work. The separate Private MCP OAuth implementation is described below.
+
+## Private MCP OAuth connection (first release; requires live authorization test)
+**Endpoint:** `https://jori-knowledge-hub.vercel.app/api/mcp-private`
+
+The Private endpoint exposes the same four read-only tools, restricted to the **Private Blob store** and recognized category folders. It does not return document content or metadata from private storage to unauthenticated tool calls. The Public MCP endpoint `/api/mcp` is unchanged.
+
+The Knowledge Hub acts as its own OAuth authorization server, using the existing administrator login cookie as proof of identity. OAuth discovery and endpoints:
+- `/.well-known/oauth-protected-resource`
+- `/.well-known/oauth-authorization-server`
+- `/oauth/register` (dynamic client registration; public clients and PKCE)
+- `/oauth/authorize` (admin-session consent)
+- `/oauth/token` (authorization code with PKCE and refresh-token rotation)
+
+The server uses its existing `SESSION_SECRET` for signing, and writes authorization codes and one-time replay markers to reserved, **private** Blob prefixes (not indexed as documents). Access tokens are valid for one hour; refresh tokens are valid for 30 days. ChatGPT's registered redirect URI must match an allowed ChatGPT callback. The endpoint never accepts a Vercel Blob read-write token from the ChatGPT client.
+
+### ChatGPT setup
+1. Ensure you can log in to the existing Knowledge Hub website as administrator.
+2. In ChatGPT select **Add custom MCP server**. Set the name to `Jori's Knowledge Hub — Private` and the URL to `https://jori-knowledge-hub.vercel.app/api/mcp-private`.
+3. Choose **OAuth**, use **Dynamic Client Registration (DCR)** rather than manually entering client credentials, and request scope `documents:read`. The optional `offline_access` scope is advertised for client refresh support. Use token endpoint client authentication **none**, as the flow uses PKCE.
+4. When the Knowledge Hub authorization page opens, sign in to the Knowledge Hub administrator interface in another tab if needed, return to the consent page, refresh, and select **Authorize read-only access**.
+5. Verify list, search, and document read operations. Also test that unauthorized requests cannot list private document metadata and that root-level files remain excluded.
+
+### Security and operational limitations
+- **Live ChatGPT OAuth exchange and Private Blob read/write have not yet been end-to-end confirmed.** Vercel's successful deployment does not establish that the consent/token exchange succeeds. Do not treat the connector as security-audited until authorization tests pass.
+- This is a deliberately small self-hosted authorization implementation, not a substitute for a professionally maintained identity provider for multi-user use.
+- There is currently no per-client administrator revocation UI; tokens expire, and rotating `SESSION_SECRET` revokes all Knowledge Hub sessions and OAuth tokens.
+- The existing admin-password login lacks persistent distributed rate limiting; apply appropriate protections before storing highly sensitive materials.
+- HTML documents are available as extracted text (up to 60,000 characters); PDF content is currently metadata-only.
+- OAuth-state blobs use expiry and replay markers; maintain and monitor Blob usage and storage permissions.
+- The `tests/oauth.test.js` security regression tests run using `npm test` and the GitHub Actions workflow `.github/workflows/mcp-tests.yml`.
