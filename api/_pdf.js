@@ -25,7 +25,8 @@ async function toBuffer(file){
  return Buffer.concat(chunks,total);
 }
 async function pdfText(file,options={}){
- const range=pageRange(options);
+ const structureOnly=options.structure_only===true;
+ const range=structureOnly?null:pageRange(options);
  const bytes=await toBuffer(file);
  if(bytes.subarray(0,5).toString('ascii')!=='%PDF-')throw Error('File is not a valid PDF');
  const pdf=await new Promise((resolve,reject)=>{
@@ -52,10 +53,12 @@ async function pdfText(file,options={}){
  });
  const totalPages=pdf.Pages?.length||0;
  if(totalPages<1)throw Error('PDF page count unavailable');
- if(range.start>totalPages)throw new RangeError('Requested page is beyond PDF page count ('+totalPages+')');
+ if(!structureOnly&&range.start>totalPages)throw new RangeError('Requested page is beyond PDF page count ('+totalPages+')');
  const pages=[];let used=0;let truncated=false;
- const last=Math.min(range.end,totalPages);
- for(let number=range.start;number<=last;number++){
+ const last=structureOnly?totalPages:Math.min(range.end,totalPages);
+ const first=structureOnly?1:range.start;
+ const manifest=[];
+ for(let number=first;number<=last;number++){
   const records=pdf.Pages[number-1]?.Texts||[];
   const items=records.map(t=>({x:Number(t.x)||0,y:Number(t.y)||0,
    text:(t.R||[]).map(r=>String(r.T||'')).join('')})).filter(t=>t.text);
@@ -66,6 +69,10 @@ async function pdfText(file,options={}){
    full+=item.text;prev=item.y;
   }
   full=full.trim();
+  if(structureOnly){
+   manifest.push({page:number,characters:full.length,extraction:full.length?'text':'ocr-required',preview:full.slice(0,120)});
+   continue;
+  }
   const remaining=Math.max(0,MAX_CHARS-used);
   const part=full.slice(0,remaining);
   if(part.length<full.length)truncated=true;
@@ -74,6 +81,17 @@ async function pdfText(file,options={}){
     truncated:part.length<full.length});
   if(remaining<=full.length&&number<last)truncated=true;
  }
+  if(structureOnly){
+   const needsOcr=manifest.filter(p=>p.extraction==='ocr-required').map(p=>p.page);
+   const extracted=manifest.length-needsOcr.length;
+   return {document_type:'pdf',total_pages:totalPages,examined_pages:manifest.length,
+    text_pages:extracted,ocr_required_pages:needsOcr,pages:manifest,
+    extraction_coverage:manifest.length/totalPages,
+    text_layer_coverage:extracted/totalPages,
+    extraction_complete:manifest.length===totalPages&&needsOcr.length===0,
+    extraction:needsOcr.length?'pdf-text-partial':'pdf-text',
+    notes:needsOcr.length?'Some pages have no extractable text; OCR was not performed.':'Page text layers were examined; graphical content may still require visual review.'};
+  }
   const needsOcr=pages.filter(p=>p.extraction==='ocr-required').map(p=>p.page);
  return {text:pages.map(p=>'[Page '+p.page+']\n'+p.text).join('\n\n'),pages,total_pages:totalPages,
    requested_pages:{start:range.start,end:last},
