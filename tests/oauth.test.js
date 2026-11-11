@@ -53,7 +53,7 @@ test('Private MCP only lists tool schemas without authentication',async()=>{
  assert.equal(init.statusCode,200);
  const tools=await request(privateMcp,'POST',{}, {jsonrpc:'2.0',id:2,method:'tools/list'});
  const data=JSON.parse(tools.text);
- assert.equal(data.result.tools.length,4);
+ assert.equal(data.result.tools.length,6);
  assert.ok(data.result.tools.every(t=>t.securitySchemes?.[0]?.type==='oauth2'));
 });
 test('Unauthenticated private document call never returns document data',async()=>{
@@ -163,4 +163,19 @@ test('Private document structure requires authorization',async()=>{
  const out=JSON.parse(res.text).result;
  assert.equal(out.isError,true);
  assert.match(out.content[0].text,/Authorization required/);
+});
+
+test('Private content search is advertised as OAuth-protected and read-only',async()=>{
+ const res=await request(privateMcp,'POST',{}, {jsonrpc:'2.0',id:52,method:'tools/list'});
+ const tools=JSON.parse(res.text).result.tools;
+ const search=tools.find(t=>t.name==='search_content');
+ assert.ok(search);
+ assert.equal(search.annotations.readOnlyHint,true);
+ assert.equal(search.securitySchemes[0].type,'oauth2');
+ assert.deepEqual(search.inputSchema.required,['query','ids']);
+});
+test('Private content search rejects unauthorized calls before reading Blob',async()=>{
+ const res=await request(privateMcp,'POST',{}, {jsonrpc:'2.0',id:53,method:'tools/call',params:{
+  name:'search_content',arguments:{query:'security',ids:['private:01-solutions/cscf-demo/Secure Software Development Process_V1.0A.pdf']}}});
+ assert.match(JSON.parse(res.text).result.content[0].text,/Authorization required/);
 });
