@@ -32,10 +32,14 @@ async function pdfText(file,options={}){
  try{
   const {PDFParse}=require('pdf-parse');
   parser=new PDFParse({data:new Uint8Array(bytes)});
-  const result=await Promise.race([
-   parser.getText({first:range.start,last:range.end}),
-   new Promise((_,reject)=>setTimeout(()=>reject(new Error('PDF extraction time limit exceeded')),PARSE_TIMEOUT_MS))
-  ]);
+  let timeout;
+  let result;
+  try{
+   result=await Promise.race([
+    parser.getText({first:range.start,last:range.end}),
+    new Promise((_,reject)=>{timeout=setTimeout(()=>reject(new Error('PDF extraction time limit exceeded')),PARSE_TIMEOUT_MS)})
+   ]);
+  }finally{if(timeout)clearTimeout(timeout)}
   const totalPages=result.total;
   if(!Number.isInteger(totalPages)||totalPages<1)throw Error('PDF page count unavailable');
   if(range.start>totalPages)throw new RangeError('Requested page is beyond PDF page count ('+totalPages+')');
