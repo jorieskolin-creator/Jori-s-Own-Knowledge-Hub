@@ -82,6 +82,15 @@ async function callModel(doc,source){
   document_type:String(d.document_type||'').slice(0,100),
   important_sections:strings(d.important_sections,60),
   related_documents:strings(d.related_documents,30),enrichment:'AI',
-  extraction_status:source.extraction_complete?'COMPLETE':'PARTIAL'};
+  extraction_status:source.extraction_complete?'COMPLETE':'PARTIAL',
+  text_extraction:source.extraction_complete?'COMPLETE':'PARTIAL',
+  visual_inspection:'NOT_ASSESSED',
+  // These notes state the processing boundaries; they are NOT claims of independent review.
+  review_notes:[
+   'AI-assisted discovery description generated from extractable Public document text; document claims have not been independently verified.',
+   source.extraction_complete?'Text extraction reported complete.':'Text extraction was partial.',
+   'Graphics and other visual content were not independently inspected.',
+   ...(source.limitations||[]).slice(0,5)
+  ].join(' ').slice(0,6000)};
 }
 module.exports={extractPublic,callModel,reassemble,SOURCE_BUDGET};
