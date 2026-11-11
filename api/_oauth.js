@@ -94,7 +94,7 @@ function authorized(req){
  const header=req.headers.authorization||'';
  const m=/^Bearer ([A-Za-z0-9_.-]+)$/.exec(header);
  const d=m?verify(m[1],'access'):null;
- return d&&d.aud===RESOURCE&&d.iss===BASE&&d.scope===SCOPE?d:null;
+ return d&&(d.aud===RESOURCE||d.aud===BASE)&&d.iss===BASE&&d.scope===SCOPE?d:null;
 }
 function blobOptions(path){return {access:'private',storeId:privateStore(),addRandomSuffix:false,allowOverwrite:false,contentType:'application/json',ttlDays:path.includes('/refresh/')?31:1}}
 async function createUnique(path,body){return put(path,JSON.stringify(body),blobOptions(path))}
@@ -112,10 +112,10 @@ async function consumeOnce(type,id){
   return true;
  }catch{return false}
 }
-function token(sub,clientId){
+function token(sub,clientId,resource=RESOURCE){
  const now=Date.now(),refreshId=nonce();
- const access_token=sign({kind:'access',sub,client_id:clientId,scope:SCOPE,iss:BASE,aud:RESOURCE,iat:now,exp:now+3600000,jti:nonce()});
- const refresh_token=sign({kind:'refresh',sub,client_id:clientId,scope:SCOPE,iss:BASE,aud:RESOURCE,iat:now,exp:now+30*86400000,jti:refreshId});
+ const access_token=sign({kind:'access',sub,client_id:clientId,scope:SCOPE,iss:BASE,aud:resource,iat:now,exp:now+3600000,jti:nonce()});
+ const refresh_token=sign({kind:'refresh',sub,client_id:clientId,scope:SCOPE,iss:BASE,aud:resource,iat:now,exp:now+30*86400000,jti:refreshId});
  return {access_token,token_type:'Bearer',expires_in:3600,refresh_token,scope:SCOPE};
 }
 module.exports={BASE,RESOURCE,SCOPE,client,safeRedirect,sign,verify,safeEqual,reply,secure,html,escape,readCookie,form,nonce,metadata,resourceMetadata,challenge,authorized,createUnique,readState,consumeOnce,token,hash};
