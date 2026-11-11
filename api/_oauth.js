@@ -81,7 +81,7 @@ function metadata(){
  return {issuer:BASE,authorization_endpoint:BASE+'/oauth/authorize',token_endpoint:BASE+'/oauth/token',
   registration_endpoint:BASE+'/oauth/register',response_types_supported:['code'],grant_types_supported:['authorization_code','refresh_token'],
   token_endpoint_auth_methods_supported:['none'],code_challenge_methods_supported:['S256'],
-  scopes_supported:[SCOPE],service_documentation:BASE};
+  scopes_supported:[SCOPE,'offline_access'],service_documentation:BASE};
 }
 function resourceMetadata(){
  return {resource:RESOURCE,authorization_servers:[BASE],scopes_supported:[SCOPE],
@@ -96,8 +96,8 @@ function authorized(req){
  const d=m?verify(m[1],'access'):null;
  return d&&d.aud===RESOURCE&&d.iss===BASE&&d.scope===SCOPE?d:null;
 }
-function blobOptions(){return {access:'private',storeId:privateStore(),addRandomSuffix:false,allowOverwrite:false,contentType:'application/json'}}
-async function createUnique(path,body){return put(path,JSON.stringify(body),blobOptions())}
+function blobOptions(path){return {access:'private',storeId:privateStore(),addRandomSuffix:false,allowOverwrite:false,contentType:'application/json',ttlDays:path.includes('/refresh/')?31:1}}
+async function createUnique(path,body){return put(path,JSON.stringify(body),blobOptions(path))}
 async function readState(path){
  const x=await get(path,{access:'private',storeId:privateStore()});
  if(!x||!x.stream)return null;
