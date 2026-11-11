@@ -42,13 +42,15 @@ async function authorize(req,res){
  }
  if(req.method!=='POST')return bad(res,'Method not allowed',405);
  if(!valid(req,'admin'))return html(res,401,'<h2>Admin session required</h2><p>Sign in to Knowledge Hub as administrator and restart the connection.</p>');
- // Browser-origin validation supplements the signed session-bound form token.
+ // Some browsers submit Origin: null from a constrained authorization
+ // context. Accept that only when Fetch Metadata positively confirms a
+ // same-origin navigation. Keep rejecting cross-site origins and requests.
  const origin=req.headers.origin;
- if(origin&&origin!==BASE)
-  return html(res,403,'<h2>Unauthorized approval origin</h2><p>Knowledge Hub only accepts consent from its own website.</p>');
  const fetchSite=req.headers['sec-fetch-site'];
  if(fetchSite&&fetchSite!=='same-origin')
   return html(res,403,'<h2>Unauthorized approval context</h2><p>The approval must be submitted from Knowledge Hub itself.</p>');
+ if(origin&&origin!==BASE&&!(origin==='null'&&fetchSite==='same-origin'))
+  return html(res,403,'<h2>Unauthorized approval origin</h2><p>The browser reported an origin other than Knowledge Hub. Please restart authorization in the same browser profile.</p>');
  const b=bodyText(req);
  const a=verify(b.request,'authorization');
  if(typeof b.request!=='string'||!b.request)
