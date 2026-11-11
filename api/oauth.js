@@ -27,14 +27,14 @@ async function authorize(req,res){
  if(req.method==='GET'){
   const q=req.query||{};
   if(!validAuth(q))return html(res,400,'<h2>Invalid authorization request</h2><p>ChatGPT must register a valid OAuth client with a permitted redirect URI and PKCE challenge.</p>');
-  // Keep one CSRF cookie across refreshes and concurrent authorization tabs.
-  // Previously every GET replaced the cookie, invalidating older consent forms.
-  const existingCsrf=readCookie(req,'__Host-kh_mcp_csrf');
-  const csrf=/^[A-Za-z0-9_-]{43}$/.test(existingCsrf)?existingCsrf:nonce();
-  const request=sign({kind:'authorization',exp:Date.now()+600000,client_id:q.client_id,redirect_uri:q.redirect_uri,
-    state:q.state,challenge:q.code_challenge,scope:SCOPE,resource:q.resource||RESOURCE,csrf_hash:hash(csrf)});
-  res.setHeader('Set-Cookie','__Host-kh_mcp_csrf='+csrf+'; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=600');
+  // Bind consent to the existing authenticated admin session, avoiding a
+  // second temporary cookie that some browsers do not retain.
   const login=valid(req,'admin');
+  const adminSession=readCookie(req,'__Host-kh_admin');
+  const request=login?sign({kind:'authorization',exp:Date.now()+600000,
+    client_id:q.client_id,redirect_uri:q.redirect_uri,state:q.state,
+    challenge:q.code_challenge,scope:SCOPE,resource:q.resource||RESOURCE,
+    admin_session_hash:hash(adminSession)}):null;
   let content='<h1>Knowledge Hub · Private</h1><p>ChatGPT is requesting <strong>read-only access</strong> to documents in KnowledgeHub-Private. No upload, modification or deletion permission will be granted.</p>';
   if(!login)content+='<p class="warning">You must first sign in as Knowledge Hub administrator.</p><p><a target="_blank" rel="noopener noreferrer" href="/">Open Knowledge Hub login in a new tab</a>. After signing in, return to this page and refresh it.</p>';
   else content+='<p>You are signed in as administrator. Approving will allow the connected ChatGPT client to read Private documents until you revoke or expire its authorization.</p><form method="POST" action="/oauth/authorize"><input type="hidden" name="request" value="'+escape(request)+'"><input type="hidden" name="consent" value="yes"><button type="submit">Authorize read-only access</button></form>';
@@ -42,27 +42,30 @@ async function authorize(req,res){
  }
  if(req.method!=='POST')return bad(res,'Method not allowed',405);
  if(!valid(req,'admin'))return html(res,401,'<h2>Admin session required</h2><p>Sign in to Knowledge Hub as administrator and restart the connection.</p>');
+ // Browser-origin validation supplements the signed session-bound form token.
+ const origin=req.headers.origin;
+ if(origin&&origin!==BASE)
+  return html(res,403,'<h2>Unauthorized approval origin</h2><p>Knowledge Hub only accepts consent from its own website.</p>');
+ const fetchSite=req.headers['sec-fetch-site'];
+ if(fetchSite&&fetchSite!=='same-origin')
+  return html(res,403,'<h2>Unauthorized approval context</h2><p>The approval must be submitted from Knowledge Hub itself.</p>');
  const b=bodyText(req);
- const csrf=readCookie(req,'__Host-kh_mcp_csrf');
  const a=verify(b.request,'authorization');
- // Show distinct non-sensitive failures instead of one ambiguous error message.
- if(!b.request||typeof b.request!=='string')
-  return html(res,400,'<h2>Authorization form could not be read</h2><p>The browser submission was missing its authorization request. Restart the ChatGPT connection.</p>');
+ if(typeof b.request!=='string'||!b.request)
+  return html(res,400,'<h2>Authorization form could not be read</h2><p>Restart the ChatGPT connection.</p>');
  if(!a)
-  return html(res,403,'<h2>Authorization request expired or invalid</h2><p>The signed request was not accepted, possibly because its 10-minute validity period ended. Restart the ChatGPT connection.</p>');
+  return html(res,403,'<h2>Authorization request expired or invalid</h2><p>The signed approval has expired or was modified. Restart the ChatGPT connection.</p>');
  if(b.consent!=='yes')
-  return html(res,400,'<h2>Approval not confirmed</h2><p>The consent form did not contain the expected approval value. Restart the connection.</p>');
- if(!csrf)
-  return html(res,403,'<h2>Authorization security cookie missing</h2><p>Your browser did not send the temporary security cookie. Use the same browser and domain for Knowledge Hub login and authorization, then restart the connection.</p>');
- if(!/^[A-Za-z0-9_-]{43}$/.test(csrf)||!safeEqual(hash(csrf),a.csrf_hash))
-  return html(res,403,'<h2>Authorization security cookie mismatch</h2><p>The request and browser cookie do not match. Start a fresh ChatGPT connection. Avoid opening the authorization page in a different browser profile.</p>');
+  return html(res,400,'<h2>Approval not confirmed</h2><p>Explicit approval is required.</p>');
+ const adminSession=readCookie(req,'__Host-kh_admin');
+ if(!adminSession||!a.admin_session_hash||!safeEqual(hash(adminSession),a.admin_session_hash))
+  return html(res,403,'<h2>Administrator session changed</h2><p>Sign in to Knowledge Hub and restart the authorization request. The approval must use the same admin session that opened the consent form.</p>');
  const c=client(a.client_id);
  if(!c||!c.redirect_uris.includes(a.redirect_uri)||![RESOURCE,BASE].includes(a.resource)||a.scope!==SCOPE)return bad(res,'Invalid client or redirect URI');
  const code=nonce();
  await createUnique('__mcp-oauth-codes/'+hash(code)+'.json',{client_id:a.client_id,redirect_uri:a.redirect_uri,
   challenge:a.challenge,resource:a.resource,scope:SCOPE,exp:Date.now()+180000});
  const destination=new URL(a.redirect_uri);destination.searchParams.set('code',code);destination.searchParams.set('state',a.state);
- res.setHeader('Set-Cookie','__Host-kh_mcp_csrf=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0');
  return redirect(res,destination.toString());
 }
 async function registration(req,res){
