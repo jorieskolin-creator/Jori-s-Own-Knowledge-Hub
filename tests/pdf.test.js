@@ -69,3 +69,15 @@ test('PDF structure inspection examines complete file without returning full tex
  assert.match(result.pages[0].preview,/Full Document Structure Test/);
  assert.equal(result.text,undefined);
 });
+
+test('On-demand lexical search retrieves text from a PDF with numbered page source',async()=>{
+ const {searchFile}=require('../api/_content_search');
+ const bytes=makePdf('Evidence Acquisition Control');
+ const stream=new ReadableStream({start(c){c.enqueue(bytes);c.close()}});
+ const r=await searchFile({size:bytes.length,stream},'application/pdf','Evidence Acquisition',5);
+ assert.equal(r.coverage.total_pages,1);
+ assert.equal(r.coverage.examined_pages,1);
+ assert.equal(r.coverage.extraction_complete,true);
+ assert.equal(r.matches[0].page,1);
+ assert.match(r.matches[0].passage,/Evidence Acquisition/);
+});
