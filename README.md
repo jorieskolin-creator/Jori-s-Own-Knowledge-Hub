@@ -166,3 +166,14 @@ Modes: `focused` (6 passages / 10k characters), `comparative` (10 / 18k), and `c
 Each package includes original passage text, page/section identifier, source title and path, matched terms, a deterministic score, truncation flags, inspected-source manifest, extraction coverage, failure details and explicit limitations. The status distinguishes `MATCHES_FOUND`, `NO_LEXICAL_MATCH`, and `PARTIAL_EXTRACTION`. The field `evidence_sufficiency` always reads `NOT_ASSESSED`; lexical retrieval must not assert semantic exhaustiveness or verified absence. Missing documents are rejected before any Blob content retrieval; Private calls require existing OAuth authorization. The existing `get_document`, `get_document_structure`, and `search_content` operations remain available.
 
 No Golden Standards have been created. Next: Step 4 deterministic quality gates for retrieval (coverage, citation and handling of unresolved gaps), without conflating them with domain-specific assessment authority.
+
+## Knowledge Acquisition Engine — Step 4: deterministic retrieval quality gates (2026-11-11)
+
+A shared code-level `api/_quality_gate.js` now evaluates every `retrieve_evidence` response before it is sent by either MCP endpoint. The gate is **retrieval integrity only**, not a FinOps, Landing Zone, Solution Assurance, legal, or business-decision gate.
+
+- `retrieval_quality.status` is `PASS` when the explicitly selected sources are processed, source location invariants pass, and no technical limitations besides the inherent semantic limitation are present; `WARN` for missing lexical matches, bounded/truncated passages, or extraction gaps; `BLOCK` for failed selected-source inspection, invalid passage provenance, inconsistent source scope, or manifest integrity defects.
+- Every passage includes `source_verified` and a SHA-256 digest of its returned text + source locator. These are *in-process structural integrity markers*, not cryptographic proof of truth or a cross-request guarantee that a source is immutable.
+- The report includes separate `source_scope`, `extraction`, `passage_provenance`, `bounded_output`, and `relevance_completeness` gates, actionable blocking reasons, warnings, a policy version, `evidence_sufficiency: NOT_ASSESSED`, and `verified_absence: false`.
+- Lexical search can miss semantically relevant statements, diagrams and scanned pages. Accordingly `relevance_completeness` remains `NOT_VERIFIED` even when technical retrieval integrity is `PASS`.
+- Strict Public/Private store isolation, OAuth protection, read-only document processing, and the absence of external AI providers remain unchanged.
+- Focused automated regression tests were added for valid source anchoring, modified passages, missing documents, output limits and no-match uncertainty. **Golden Standards deliberately remain out of scope.**
