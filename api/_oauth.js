@@ -73,8 +73,21 @@ function readCookie(req,name){
  return row?row.slice(name.length+1):'';
 }
 function form(req){
- if(req.body&&typeof req.body==='object')return req.body;
- try{return Object.fromEntries(new URLSearchParams(req.body||''))}catch{return {}}
+ const body=req.body;
+ if(body===undefined||body===null)return {};
+ if(Buffer.isBuffer(body))return parseText(body.toString('utf8'));
+ if(typeof body==='string')return parseText(body);
+ if(body instanceof URLSearchParams)return Object.fromEntries(body);
+ if(typeof body==='object'&&!Array.isArray(body))return body;
+ return {};
+}
+function parseText(text){
+ if(typeof text!=='string'||text.length>65536)return {};
+ const source=text.trim();
+ if(source.startsWith('{')){
+  try{const value=JSON.parse(source);return value&&typeof value==='object'&&!Array.isArray(value)?value:{}}catch{return {}}
+ }
+ try{return Object.fromEntries(new URLSearchParams(source))}catch{return {}}
 }
 function nonce(){return crypto.randomBytes(32).toString('base64url')}
 function metadata(){
