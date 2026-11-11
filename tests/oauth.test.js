@@ -53,7 +53,7 @@ test('Private MCP only lists tool schemas without authentication',async()=>{
  assert.equal(init.statusCode,200);
  const tools=await request(privateMcp,'POST',{}, {jsonrpc:'2.0',id:2,method:'tools/list'});
  const data=JSON.parse(tools.text);
- assert.equal(data.result.tools.length,8);
+ assert.equal(data.result.tools.length,10);
  assert.ok(data.result.tools.every(t=>t.securitySchemes?.[0]?.type==='oauth2'));
 });
 test('Unauthenticated private document call never returns document data',async()=>{
@@ -206,4 +206,24 @@ test('Private coverage inspection requires OAuth and is marked read-only',async(
  const r=await request(privateMcp,'POST',{}, {jsonrpc:'2.0',id:81,method:'tools/call',params:{
   name:'verify_coverage',arguments:{query:'evidence',ids:['private:01-solutions/cscf-demo/Secure Software Development Process_V1.0A.pdf']}}});
  assert.match(JSON.parse(r.text).result.content[0].text,/Authorization required/);
+});
+
+test('Private Master Table discovery and automatic evidence tools are OAuth-scoped',async()=>{
+ const r=await request(privateMcp,'POST',{}, {jsonrpc:'2.0',id:90,method:'tools/list'});
+ const definitions=JSON.parse(r.text).result.tools;
+ for(const name of ['discover_sources','retrieve_topic_evidence']){
+  const t=definitions.find(x=>x.name===name);
+  assert.ok(t);
+  assert.equal(t.annotations.readOnlyHint,true);
+  assert.equal(t.securitySchemes[0].type,'oauth2');
+  const noAuth=await request(privateMcp,'POST',{}, {jsonrpc:'2.0',id:91,method:'tools/call',
+   params:{name,arguments:{query:'AI governance'}}});
+  assert.match(JSON.parse(noAuth.text).result.content[0].text,/Authorization required/);
+ }
+});
+test('Master Table administration rejects requests without an admin session',async()=>{
+ const masterTable=require('../api/master-table');
+ const r=await request(masterTable,'GET',{}, {}, {});
+ assert.equal(r.statusCode,401);
+ assert.match(r.text,/Admin login required/);
 });
