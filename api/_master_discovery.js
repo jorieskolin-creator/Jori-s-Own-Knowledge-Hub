@@ -18,11 +18,11 @@ function relevance(query,entry){
   terms.reduce((n,t)=>n+(keys.includes(t)?6:0)+(themes.includes(t)?5:0)+(summary.includes(t)?2:0)+(title.includes(t)?3:0),0);
  return {score,matching_terms:hit};
 }
-async function discover(query,scope,docs,limit=12){
+async function discover(query,scope,docs,limit=12,indexOverride=null){
  termsOf(query);
  if(!['public','private'].includes(scope))throw Error('Invalid discovery scope');
  if(!Number.isInteger(limit)||limit<1||limit>30)throw Error('limit must be 1–30');
- const {table}=await readMaster();
+ const table=indexOverride===null?(await readMaster()).table:{records:indexOverride};
  const index=table.records.filter(r=>r.access===scope);
  const byId=new Map(index.map(r=>[r.id,r]));
  const found=[],stale=[],noEntry=[];
