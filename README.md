@@ -155,3 +155,14 @@ Both MCP endpoints now expose read-only \`search_content\` in addition to \`sear
 **Security:** Private search is behind the same OAuth guard as other Private MCP retrieval tools; Public search never resolves Private IDs. Source texts and derived segments are processed ephemerally and are not written back to the Blob stores. The owner remains responsible for all document additions and edits directly in Vercel.
 
 **Validation:** Unit tests cover late-document terms, heading association, deterministic ranking, query validation, PDF extraction, source provenance, and OAuth enforcement. Live use of the new MCP operation requires tool schema refresh by the ChatGPT connector; deployment READY alone does not verify invocation.
+
+## Knowledge Acquisition Engine — Step 3: evidence packages (2026-11-11)
+
+Both read-only MCP endpoints expose `retrieve_evidence`:
+`{"query":"evidence acquisition and verification","ids":["private:01-solutions/.../file.html"],"mode":"focused"}`.
+
+Modes: `focused` (6 passages / 10k characters), `comparative` (10 / 18k), and `comprehensive` (16 / 28k). A request explicitly selects up to four authorized documents; it is NOT an automatic whole-library search. Extraction is on demand, with a 24-second request budget and file parser limits. PDF pages and HTML sections are mapped to bounded source-text passages, ranked deterministically by lexical matches, expanded with local context, and selected with per-source quotas and a first-pass cross-document balancing rule. No generative summarization, external AI calls, persistent indexes, OCR, or source writes are introduced.
+
+Each package includes original passage text, page/section identifier, source title and path, matched terms, a deterministic score, truncation flags, inspected-source manifest, extraction coverage, failure details and explicit limitations. The status distinguishes `MATCHES_FOUND`, `NO_LEXICAL_MATCH`, and `PARTIAL_EXTRACTION`. The field `evidence_sufficiency` always reads `NOT_ASSESSED`; lexical retrieval must not assert semantic exhaustiveness or verified absence. Missing documents are rejected before any Blob content retrieval; Private calls require existing OAuth authorization. The existing `get_document`, `get_document_structure`, and `search_content` operations remain available.
+
+No Golden Standards have been created. Next: Step 4 deterministic quality gates for retrieval (coverage, citation and handling of unresolved gaps), without conflating them with domain-specific assessment authority.
