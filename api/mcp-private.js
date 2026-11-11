@@ -59,10 +59,10 @@ async function getContent(doc){
 function result(value){return {content:[{type:'text',text:JSON.stringify(value)}],structuredContent:value,isError:false}}
 function fail(message){return {content:[{type:'text',text:String(message)}],isError:true}}
 const TOOLS=[
- {name:'list_documents',description:'List private Knowledge Hub documents in the six explicit storage categories. Root files and protected documents are excluded.',inputSchema:{type:'object',properties:{category:{type:'string'},subfolder:{type:'string'},limit:{type:'integer',minimum:1,maximum:100}},additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]},
- {name:'search_documents',description:'Search private Knowledge Hub document titles, categories, paths, and display groups. Metadata search only; not full-text.',inputSchema:{type:'object',properties:{query:{type:'string'},limit:{type:'integer',minimum:1,maximum:50}},required:['query'],additionalProperties:false},annotations:{readOnlyHint:true}},
- {name:'get_document_metadata',description:'Fetch source metadata for a private Knowledge Hub document by its private:path identifier.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false},annotations:{readOnlyHint:true}},
- {name:'get_document',description:'Read the text of a public HTML document by private:path identifier. PDF is currently metadata-only. Only authorized read-only access to private documents.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false},annotations:{readOnlyHint:true}}
+ {name:'list_documents',description:'List private Knowledge Hub documents in the six explicit storage categories. Root-level files are excluded; access requires OAuth.',inputSchema:{type:'object',properties:{category:{type:'string'},subfolder:{type:'string'},limit:{type:'integer',minimum:1,maximum:100}},additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]},
+ {name:'search_documents',description:'Search private Knowledge Hub document titles, categories, paths, and display groups. Metadata search only; not full-text.',inputSchema:{type:'object',properties:{query:{type:'string'},limit:{type:'integer',minimum:1,maximum:50}},required:['query'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]},
+ {name:'get_document_metadata',description:'Fetch source metadata for a private Knowledge Hub document by its private:path identifier.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]},
+ {name:'get_document',description:'Read the text of an authenticated Private HTML document by private:path identifier. PDF is currently metadata-only. Only authorized read-only access to private documents.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]}
 ];
 async function callTool(name,args){
  if(name==='list_documents'){
@@ -77,9 +77,9 @@ async function callTool(name,args){
   return result({documents:found.slice(0,limit),total:found.length,search_scope:'metadata',truncated:found.length>limit});
  }
  if(name==='get_document'||name==='get_document_metadata'){
-  const id=String(args.id||'');if(!id.startsWith('private:')||!permitted(id.slice(7)))return fail('Only categorized private document identifiers are allowed');
+  const id=String(args.id||'');if(!id.startsWith('private:')||!permitted(id.slice(8)))return fail('Only categorized private document identifiers are allowed');
   const docs=await entries();const doc=docs.find(d=>d.id===id);
-  if(!doc)return fail('Document not found in public catalog');
+  if(!doc)return fail('Document not found in Private catalog');
   if(name==='get_document_metadata')return result(doc);
   const body=await getContent(doc);return result({...doc,...body});
  }
