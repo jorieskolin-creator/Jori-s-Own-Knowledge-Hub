@@ -1,6 +1,6 @@
 'use strict';
 const {send,valid,postBody}=require('./_auth');
-const {readMaster,writeMaster,sourceInventory,reconcile,normalizeEdit,descriptionHealth}=require('./_master_table');
+const {readMaster,writeMaster,sourceInventory,reconcile,normalizeEdit,descriptionHealth,MASTER_TABLE_FORMAT}=require('./_master_table');
 const {extractPublic,callModel}=require('./_master_enrich');
 function safeMutation(req){
  const origin=req.headers?.origin,host=req.headers?.host;
@@ -62,7 +62,7 @@ async function enrich(res,body){
  if(doc.summary||doc.enrichment!=='NONE'||doc.key_terms?.length||doc.themes?.length)
   return send(res,409,{error:'Existing manually maintained content is preserved; edit it in Master Table'});
  const data=await extractPublic(doc);const enrichment=await callModel(doc,data);
- table.records[idx]=normalizeEdit(doc,enrichment);
+ table.records[idx]=normalizeEdit(doc,enrichment,{markApproved:false});
  table.records[idx].enrichment='AI';
  table.records[idx].extraction_status=enrichment.extraction_status;
  await writeMaster(table,etag);
@@ -81,9 +81,12 @@ async function importEntries(res,body){
   const existing=table.records[i];
   if(existing.summary||existing.key_terms?.length||existing.themes?.length){skipped++;continue;}
   const changes={};
-  for(const k of ['title','summary','key_terms','themes','document_type','important_sections','related_documents'])
+  for(const k of ['title','summary','key_terms','themes','document_type','important_sections','related_documents',
+   'review_notes','review_version','text_extraction','visual_inspection'])
    if(Object.prototype.hasOwnProperty.call(row,k))changes[k]=row[k];
-  table.records[i]=normalizeEdit(existing,changes);modified++;
+  // The imported table has already been reviewed by the Admin. Preserve its
+  // source-review timestamp when supplied; do not trust imported source hashes.
+  table.records[i]=normalizeEdit(existing,changes,{reviewedAt:row.last_reviewed??undefined});modified++;
  }
  if(modified)await writeMaster(table,etag);
  return send(res,200,{imported:modified,skipped,existing_entries_preserved:true});
@@ -94,7 +97,7 @@ module.exports=async function(req,res){
  try{
   if(req.method==='GET'){
    const {table,etag}=await readMaster();
-   return send(res,200,{schema_version:1,etag,updated_at:table.updated_at,
+   return send(res,200,{schema_version:1,master_table_format:MASTER_TABLE_FORMAT,etag,updated_at:table.updated_at,
     records:table.records.map(r=>({...r,quality:descriptionHealth(r)})),count:table.records.length});
   }
   if(req.method!=='POST')return send(res,405,{error:'Method not allowed'});
