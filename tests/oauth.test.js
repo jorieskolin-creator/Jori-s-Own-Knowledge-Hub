@@ -89,31 +89,35 @@ test('OAuth form parser accepts URL encoded and JSON text without losing signed 
   assert.equal(parsed.request,signature);
  }
 });
-test('OAuth consent reload reuses the same CSRF cookie across concurrent tabs',async()=>{
+test('OAuth consent binds to authenticated admin session without a second cookie',async()=>{
  const redirect='https://chatgpt.com/connector/oauth/test';
  const clientId='khc.'+OAuth.sign({kind:'client',redirect_uris:[redirect],exp:Date.now()+300000});
- const challenge='a'.repeat(43);
- const query={route:'authorize',client_id:clientId,redirect_uri:redirect,response_type:'code',code_challenge_method:'S256',code_challenge:challenge,state:'validstate123456',scope:OAuth.SCOPE};
+ const query={route:'authorize',client_id:clientId,redirect_uri:redirect,response_type:'code',
+  code_challenge_method:'S256',code_challenge:'a'.repeat(43),state:'validstate123456',scope:OAuth.SCOPE};
  const adminCookie='__Host-kh_admin='+sessionSign('admin',1);
  const first=await request(oauthApi,'GET',query,{}, {cookie:adminCookie});
  assert.equal(first.statusCode,200);
- const raw=first.headers['set-cookie'];
- assert.match(raw,/^__Host-kh_mcp_csrf=/);
- const csrfCookie=raw.split(';')[0];
- const again=await request(oauthApi,'GET',query,{}, {cookie:adminCookie+'; '+csrfCookie});
+ assert.equal(first.headers['set-cookie'],undefined);
+ const signed=first.text.match(/name="request" value="([^"]+)"/)?.[1];
+ assert.ok(signed);
+ assert.equal(OAuth.verify(signed,'authorization').admin_session_hash,OAuth.hash(adminCookie.split('=')[1]));
+ const again=await request(oauthApi,'GET',query,{}, {cookie:adminCookie});
  assert.equal(again.statusCode,200);
- assert.equal(again.headers['set-cookie'].split(';')[0],csrfCookie);
  assert.match(again.text,/Authorize read-only access/);
 });
-test('OAuth consent distinguishes malformed, missing and mismatched state without granting access',async()=>{
+test('OAuth consent error classification preserves session binding and blocks cross-site approval',async()=>{
  const adminCookie='__Host-kh_admin='+sessionSign('admin',1);
+ const approval=OAuth.sign({kind:'authorization',exp:Date.now()+60000,
+  admin_session_hash:OAuth.hash(adminCookie.split('=')[1])});
  const cases=[
-  [{consent:'yes'},'Authorization form could not be read'],
-  [{consent:'yes',request:'invalid.signature'},'Authorization request expired or invalid'],
-  [{consent:'yes',request:OAuth.sign({kind:'authorization',exp:Date.now()+60000,csrf_hash:OAuth.hash('token')})},'Authorization security cookie missing']
+  [{consent:'yes'},'Authorization form could not be read',{}],
+  [{consent:'yes',request:'invalid.signature'},'Authorization request expired or invalid',{}],
+  [{consent:'yes',request:OAuth.sign({kind:'authorization',exp:Date.now()+60000,admin_session_hash:OAuth.hash('different-session')})},'Administrator session changed',{}],
+  [{consent:'yes',request:approval},'Unauthorized approval origin',{origin:'https://attacker.example'}],
+  [{consent:'yes',request:approval},'Unauthorized approval context',{'sec-fetch-site':'cross-site'}]
  ];
- for(const [body,message] of cases){
-  const r=await request(oauthApi,'POST',{route:'authorize'},body,{cookie:adminCookie});
+ for(const [body,message,headers] of cases){
+  const r=await request(oauthApi,'POST',{route:'authorize'},body,{cookie:adminCookie,...headers});
   assert.match(r.text,new RegExp(message));
   assert.ok([400,403].includes(r.statusCode));
  }
