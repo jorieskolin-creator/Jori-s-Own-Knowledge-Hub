@@ -53,7 +53,7 @@ test('Private MCP only lists tool schemas without authentication',async()=>{
  assert.equal(init.statusCode,200);
  const tools=await request(privateMcp,'POST',{}, {jsonrpc:'2.0',id:2,method:'tools/list'});
  const data=JSON.parse(tools.text);
- assert.equal(data.result.tools.length,7);
+ assert.equal(data.result.tools.length,8);
  assert.ok(data.result.tools.every(t=>t.securitySchemes?.[0]?.type==='oauth2'));
 });
 test('Unauthenticated private document call never returns document data',async()=>{
@@ -195,4 +195,15 @@ test('Unauthenticated private evidence package cannot inspect source material',a
  const payload=JSON.parse(r.text).result;
  assert.equal(payload.isError,true);
  assert.match(payload.content[0].text,/Authorization required/);
+});
+
+test('Private coverage inspection requires OAuth and is marked read-only',async()=>{
+ const declared=await request(privateMcp,'POST',{}, {jsonrpc:'2.0',id:80,method:'tools/list'});
+ const tool=JSON.parse(declared.text).result.tools.find(t=>t.name==='verify_coverage');
+ assert.ok(tool);
+ assert.equal(tool.annotations.readOnlyHint,true);
+ assert.equal(tool.securitySchemes[0].type,'oauth2');
+ const r=await request(privateMcp,'POST',{}, {jsonrpc:'2.0',id:81,method:'tools/call',params:{
+  name:'verify_coverage',arguments:{query:'evidence',ids:['private:01-solutions/cscf-demo/Secure Software Development Process_V1.0A.pdf']}}});
+ assert.match(JSON.parse(r.text).result.content[0].text,/Authorization required/);
 });
