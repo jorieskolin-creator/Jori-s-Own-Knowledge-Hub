@@ -53,3 +53,19 @@ test('PDF content extraction returns page number, text, and no OCR warning for t
  assert.equal(output.extraction,'pdf-text');
  assert.deepEqual(output.ocr_required_pages,[]);
 });
+
+test('PDF structure inspection examines complete file without returning full text',async()=>{
+ const {pdfText}=require('../api/_pdf');
+ const bytes=makePdf('Full Document Structure Test');
+ const stream=new ReadableStream({start(c){c.enqueue(bytes);c.close()}});
+ const result=await pdfText({stream,size:bytes.length},{structure_only:true});
+ assert.equal(result.total_pages,1);
+ assert.equal(result.examined_pages,1);
+ assert.equal(result.text_pages,1);
+ assert.equal(result.extraction_coverage,1);
+ assert.equal(result.text_layer_coverage,1);
+ assert.equal(result.extraction_complete,true);
+ assert.equal(result.pages[0].page,1);
+ assert.match(result.pages[0].preview,/Full Document Structure Test/);
+ assert.equal(result.text,undefined);
+});
