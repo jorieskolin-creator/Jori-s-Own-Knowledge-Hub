@@ -167,7 +167,8 @@ function reconcile(table,documents,successfulScopes){
   if(!prior){const e=entryFromDoc(d);existing.set(d.id,e);added.push(d.id);continue;}
   const sig=sourceSignature(d);if(prior.source_signature!==sig)changed.push(d.id);
   existing.set(d.id,{...prior,source_available:true,source_changed:prior.source_changed||prior.source_signature!==sig,
-   source_updated:d.updated||null,source_size:d.size??null,source_signature:sig});
+   source_updated:d.updated||null,source_size:d.size??null,source_signature:sig,
+   source_metadata_title:text(d.title||sourceTitle(d.pathname),220)});
  }
  for(const [id,e] of existing){if(!seen.has(id)&&successfulScopes.includes(e.access)){
    existing.set(id,{...e,source_available:false});missing.push(id);}}
