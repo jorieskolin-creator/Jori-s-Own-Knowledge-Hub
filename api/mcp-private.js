@@ -80,7 +80,9 @@ async function searchContent(args){
  const chosen=ids.map(id=>docs.find(d=>d.id===id));
  if(chosen.some(d=>!d))return fail('A requested document was not found within the authorized catalog');
  const matches=[],inspected=[],failures=[];
+ const deadline=Date.now()+24000;
  for(const doc of chosen){
+  if(Date.now()>deadline){failures.push({id:doc.id,reason:'Request processing time budget exhausted; document not examined'});continue;}
   try{
    const file=await get(doc.pathname,{access:'private',storeId:storeId()});
    if(!file||!file.stream)throw Error('Document unavailable');
@@ -98,7 +100,9 @@ async function searchContent(args){
   searched_documents:inspected.length,requested_documents:ids.length,documents:inspected,
   failures,matches:selected,returned_matches:selected.length,
   matches_truncated:matches.length>limit||inspected.some(x=>x.results_truncated),
-  retrieval_complete:failures.length===0&&inspected.every(x=>x.extraction_complete),
+  selected_scope_examined:failures.length===0,
+  source_extraction_complete:failures.length===0&&inspected.every(x=>x.extraction_complete),
+  result_set_complete:failures.length===0&&matches.length<=limit&&!inspected.some(x=>x.results_truncated),
   limitations:['Lexical matching does not establish semantic completeness or verified absence.',
   'Only explicitly selected documents were examined; diagrams and scanned pages may contain unseen information.']});
 }
