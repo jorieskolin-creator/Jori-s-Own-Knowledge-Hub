@@ -75,3 +75,46 @@ test('Client registration rejects external redirect destinations',async()=>{
  assert.equal(okay.statusCode,201);
  assert.ok(JSON.parse(okay.text).client_id.startsWith('khc.'));
 });
+
+test('OAuth form parser accepts URL encoded and JSON text without losing signed requests',()=>{
+ const signature=OAuth.sign({kind:'authorization',exp:Date.now()+200000});
+ for(const body of [
+  'consent=yes&request='+encodeURIComponent(signature),
+  Buffer.from('consent=yes&request='+encodeURIComponent(signature)),
+  JSON.stringify({consent:'yes',request:signature}),
+  {consent:'yes',request:signature}
+ ]){
+  const parsed=OAuth.form({body});
+  assert.equal(parsed.consent,'yes');
+  assert.equal(parsed.request,signature);
+ }
+});
+test('OAuth consent reload reuses the same CSRF cookie across concurrent tabs',async()=>{
+ const redirect='https://chatgpt.com/connector/oauth/test';
+ const clientId='khc.'+OAuth.sign({kind:'client',redirect_uris:[redirect],exp:Date.now()+300000});
+ const challenge='a'.repeat(43);
+ const query={route:'authorize',client_id:clientId,redirect_uri:redirect,response_type:'code',code_challenge_method:'S256',code_challenge:challenge,state:'validstate123456',scope:OAuth.SCOPE};
+ const adminCookie='__Host-kh_admin='+sessionSign('admin',1);
+ const first=await request(oauthApi,'GET',query,{}, {cookie:adminCookie});
+ assert.equal(first.statusCode,200);
+ const raw=first.headers['set-cookie'];
+ assert.match(raw,/^__Host-kh_mcp_csrf=/);
+ const csrfCookie=raw.split(';')[0];
+ const again=await request(oauthApi,'GET',query,{}, {cookie:adminCookie+'; '+csrfCookie});
+ assert.equal(again.statusCode,200);
+ assert.equal(again.headers['set-cookie'].split(';')[0],csrfCookie);
+ assert.match(again.text,/Authorize read-only access/);
+});
+test('OAuth consent distinguishes malformed, missing and mismatched state without granting access',async()=>{
+ const adminCookie='__Host-kh_admin='+sessionSign('admin',1);
+ const cases=[
+  [{consent:'yes'},'Authorization form could not be read'],
+  [{consent:'yes',request:'invalid.signature'},'Authorization request expired or invalid'],
+  [{consent:'yes',request:OAuth.sign({kind:'authorization',exp:Date.now()+60000,csrf_hash:OAuth.hash('token')})},'Authorization security cookie missing']
+ ];
+ for(const [body,message] of cases){
+  const r=await request(oauthApi,'POST',{route:'authorize'},body,{cookie:adminCookie});
+  assert.match(r.text,new RegExp(message));
+  assert.ok([400,403].includes(r.statusCode));
+ }
+});
