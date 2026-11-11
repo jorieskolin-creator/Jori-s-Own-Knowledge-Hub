@@ -114,6 +114,7 @@ test('OAuth consent error classification preserves session binding and blocks cr
   [{consent:'yes',request:'invalid.signature'},'Authorization request expired or invalid',{}],
   [{consent:'yes',request:OAuth.sign({kind:'authorization',exp:Date.now()+60000,admin_session_hash:OAuth.hash('different-session')})},'Administrator session changed',{}],
   [{consent:'yes',request:approval},'Unauthorized approval origin',{origin:'https://attacker.example'}],
+  [{consent:'yes',request:approval},'Unauthorized approval origin',{origin:'null'}],
   [{consent:'yes',request:approval},'Unauthorized approval context',{'sec-fetch-site':'cross-site'}]
  ];
  for(const [body,message,headers] of cases){
@@ -121,4 +122,14 @@ test('OAuth consent error classification preserves session binding and blocks cr
   assert.match(r.text,new RegExp(message));
   assert.ok([400,403].includes(r.statusCode));
  }
+});
+
+test('Opaque origin is accepted only with same-origin fetch metadata, but signed consent remains enforced',async()=>{
+ const adminCookie='__Host-kh_admin='+sessionSign('admin',1);
+ const r=await request(oauthApi,'POST',{route:'authorize'},
+  {consent:'yes',request:'not-a-valid-signature'},
+  {cookie:adminCookie,origin:'null','sec-fetch-site':'same-origin'});
+ assert.equal(r.statusCode,403);
+ assert.match(r.text,/Authorization request expired or invalid/);
+ assert.doesNotMatch(r.text,/Unauthorized approval origin/);
 });
