@@ -43,6 +43,8 @@ const schema={
 async function callModel(doc,source){
  const key=process.env.KNOWLEDGE_HUB_API_KEY;
  if(!key)throw Error('KNOWLEDGE_HUB_API_KEY is not configured');
+ if(/^(?:sk|rk)_(?:live|test)_/.test(key))
+  throw Error('Configured credential resembles a Stripe key, not an OpenAI API key. Replace it before running AI enrichment.');
  const model='gpt-6.1-terra';
  const response=await fetch('https://api.openai.com/v1/responses',{
   method:'POST',signal:AbortSignal.timeout(48000),
