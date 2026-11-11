@@ -81,8 +81,10 @@ async function importEntries(res,body){
   const existing=table.records[i];
   // Explicitly imported human-reviewed records take precedence over AI-only metadata.
   // Preserve any entry the administrator has previously saved manually.
-  if((existing.summary||existing.key_terms?.length||existing.themes?.length)&&
-     existing.enrichment!=='AI'){skipped++;continue;}
+  if(existing.enrichment==='MANUAL'||
+     ((existing.summary||existing.key_terms?.length||existing.themes?.length)&&existing.enrichment!=='AI')){
+   skipped++;continue;
+  }
   const changes={};
   for(const k of ['title','summary','key_terms','themes','document_type','important_sections','related_documents',
    'review_notes','review_version','text_extraction','visual_inspection'])
