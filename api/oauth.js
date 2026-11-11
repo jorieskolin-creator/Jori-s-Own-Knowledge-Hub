@@ -27,7 +27,10 @@ async function authorize(req,res){
  if(req.method==='GET'){
   const q=req.query||{};
   if(!validAuth(q))return html(res,400,'<h2>Invalid authorization request</h2><p>ChatGPT must register a valid OAuth client with a permitted redirect URI and PKCE challenge.</p>');
-  const csrf=nonce();
+  // Keep one CSRF cookie across refreshes and concurrent authorization tabs.
+  // Previously every GET replaced the cookie, invalidating older consent forms.
+  const existingCsrf=readCookie(req,'__Host-kh_mcp_csrf');
+  const csrf=/^[A-Za-z0-9_-]{43}$/.test(existingCsrf)?existingCsrf:nonce();
   const request=sign({kind:'authorization',exp:Date.now()+600000,client_id:q.client_id,redirect_uri:q.redirect_uri,
     state:q.state,challenge:q.code_challenge,scope:SCOPE,resource:q.resource||RESOURCE,csrf_hash:hash(csrf)});
   res.setHeader('Set-Cookie','__Host-kh_mcp_csrf='+csrf+'; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=600');
@@ -39,9 +42,20 @@ async function authorize(req,res){
  }
  if(req.method!=='POST')return bad(res,'Method not allowed',405);
  if(!valid(req,'admin'))return html(res,401,'<h2>Admin session required</h2><p>Sign in to Knowledge Hub as administrator and restart the connection.</p>');
- const b=bodyText(req),a=verify(b.request,'authorization');
- if(!a||b.consent!=='yes'||!safeEqual(hash(readCookie(req,'__Host-kh_mcp_csrf')),a.csrf_hash))
-  return html(res,403,'<h2>Authorization request expired or invalid</h2><p>Restart the connection from ChatGPT.</p>');
+ const b=bodyText(req);
+ const csrf=readCookie(req,'__Host-kh_mcp_csrf');
+ const a=verify(b.request,'authorization');
+ // Show distinct non-sensitive failures instead of one ambiguous error message.
+ if(!b.request||typeof b.request!=='string')
+  return html(res,400,'<h2>Authorization form could not be read</h2><p>The browser submission was missing its authorization request. Restart the ChatGPT connection.</p>');
+ if(!a)
+  return html(res,403,'<h2>Authorization request expired or invalid</h2><p>The signed request was not accepted, possibly because its 10-minute validity period ended. Restart the ChatGPT connection.</p>');
+ if(b.consent!=='yes')
+  return html(res,400,'<h2>Approval not confirmed</h2><p>The consent form did not contain the expected approval value. Restart the connection.</p>');
+ if(!csrf)
+  return html(res,403,'<h2>Authorization security cookie missing</h2><p>Your browser did not send the temporary security cookie. Use the same browser and domain for Knowledge Hub login and authorization, then restart the connection.</p>');
+ if(!/^[A-Za-z0-9_-]{43}$/.test(csrf)||!safeEqual(hash(csrf),a.csrf_hash))
+  return html(res,403,'<h2>Authorization security cookie mismatch</h2><p>The request and browser cookie do not match. Start a fresh ChatGPT connection. Avoid opening the authorization page in a different browser profile.</p>');
  const c=client(a.client_id);
  if(!c||!c.redirect_uris.includes(a.redirect_uri)||![RESOURCE,BASE].includes(a.resource)||a.scope!==SCOPE)return bad(res,'Invalid client or redirect URI');
  const code=nonce();
