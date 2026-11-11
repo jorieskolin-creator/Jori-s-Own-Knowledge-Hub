@@ -26,7 +26,8 @@ async function toBuffer(file){
 }
 async function pdfText(file,options={}){
  const structureOnly=options.structure_only===true;
- const range=structureOnly?null:pageRange(options);
+ const searchAll=options.search_all===true;
+ const range=(structureOnly||searchAll)?null:pageRange(options);
  const bytes=await toBuffer(file);
  if(bytes.subarray(0,5).toString('ascii')!=='%PDF-')throw Error('File is not a valid PDF');
  const pdf=await new Promise((resolve,reject)=>{
@@ -55,8 +56,8 @@ async function pdfText(file,options={}){
  if(totalPages<1)throw Error('PDF page count unavailable');
  if(!structureOnly&&range.start>totalPages)throw new RangeError('Requested page is beyond PDF page count ('+totalPages+')');
  const pages=[];let used=0;let truncated=false;
- const last=structureOnly?totalPages:Math.min(range.end,totalPages);
- const first=structureOnly?1:range.start;
+ const last=(structureOnly||searchAll)?totalPages:Math.min(range.end,totalPages);
+ const first=(structureOnly||searchAll)?1:range.start;
  const manifest=[];
  for(let number=first;number<=last;number++){
   const records=pdf.Pages[number-1]?.Texts||[];
@@ -71,6 +72,10 @@ async function pdfText(file,options={}){
   full=full.trim();
   if(structureOnly){
    manifest.push({page:number,characters:full.length,extraction:full.length?'text':'ocr-required',preview:full.slice(0,120)});
+   continue;
+  }
+  if(searchAll){
+   pages.push({page:number,text:full,extraction:full.length?'text':'ocr-required',truncated:false});
    continue;
   }
   const remaining=Math.max(0,MAX_CHARS-used);
@@ -91,6 +96,12 @@ async function pdfText(file,options={}){
     extraction_complete:manifest.length===totalPages&&needsOcr.length===0,
     extraction:needsOcr.length?'pdf-text-partial':'pdf-text',
     notes:needsOcr.length?'Some pages have no extractable text; OCR was not performed.':'Page text layers were examined; graphical content may still require visual review.'};
+  }
+  if(searchAll){
+   const ocr_required_pages=pages.filter(p=>p.extraction==='ocr-required').map(p=>p.page);
+   return {pages,total_pages:totalPages,examined_pages:pages.length,ocr_required_pages,
+    extraction_complete:ocr_required_pages.length===0&&pages.length===totalPages,
+    extraction:'pdf-full-text',truncated:false};
   }
   const needsOcr=pages.filter(p=>p.extraction==='ocr-required').map(p=>p.page);
  return {text:pages.map(p=>'[Page '+p.page+']\n'+p.text).join('\n\n'),pages,total_pages:totalPages,
