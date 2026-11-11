@@ -4,6 +4,7 @@ const {Readable}=require('node:stream');
 const {pdfText}=require('./_pdf');
 const {htmlStructure}=require('./_structure');
 const {searchFile,termsOf,MAX_RESULTS,MAX_DOCUMENTS}=require('./_content_search');
+const {assembleEvidence,validateRequest,MODES}=require('./_evidence_package');
 const OAuth=require('./_oauth');
 const VERSION='2025-03-26';
 const CATS={
@@ -106,6 +107,17 @@ async function searchContent(args){
   limitations:['Lexical matching does not establish semantic completeness or verified absence.',
   'Only explicitly selected documents were examined; diagrams and scanned pages may contain unseen information.']});
 }
+async function retrieveEvidence(args){
+ let request;
+ try{request=validateRequest(args)}catch(e){return fail('Invalid evidence request: '+e.message)}
+ if(!request.ids.every(id=>id.startsWith('private:')&&permitted(id.slice(8))))
+  return fail('Only authorized private document identifiers are permitted');
+ const catalog=await entries();
+ const documents=request.ids.map(id=>catalog.find(d=>d.id===id));
+ if(documents.some(d=>!d))return fail('A requested document was not found within the authorized catalog');
+ const output=await assembleEvidence(request,documents,doc=>get(doc.pathname,{access:'private',storeId:storeId()}));
+ return result(output);
+}
 function result(value){return {content:[{type:'text',text:JSON.stringify(value)}],structuredContent:value,isError:false}}
 function fail(message){return {content:[{type:'text',text:String(message)}],isError:true}}
 const TOOLS=[
@@ -114,6 +126,7 @@ const TOOLS=[
  {name:'get_document_metadata',description:'Fetch source metadata for a private Knowledge Hub document by its private:path identifier.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]},
  {name:'get_document',description:'Read HTML text or PDF text with page numbers, extraction status and an optional PDF page_start/page_end (maximum 10 pages). Requires OAuth and returns only Private Blob documents. No modifications.',inputSchema:{type:'object',properties:{id:{type:'string'},page_start:{type:'integer',minimum:1},page_end:{type:'integer',minimum:1}},required:['id'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]} ,{name:'get_document_structure',description:'Inspect the complete Private document on demand and report page/heading structure, extraction coverage, OCR gaps and processing limits without returning full source text.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]}
  ,{name:'search_content',description:'Search actual text within 1-4 explicitly selected private PDF/HTML documents. Examines all available PDF pages and HTML sections, returns ranked source-located passages and coverage/gap metadata. Deterministic and read-only; not a whole-library search.',inputSchema:{type:'object',properties:{query:{type:'string',minLength:2,maxLength:200},ids:{type:'array',items:{type:'string'},minItems:1,maxItems:4},limit:{type:'integer',minimum:1,maximum:20}},required:['query','ids'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]}
+ ,{name:'retrieve_evidence',description:'Assemble a bounded, source-referenced evidence package from 1–4 explicitly selected private HTML/PDF documents. Modes: focused, comparative, comprehensive. Selects lexical matches with context and source coverage diagnostics; cannot verify semantic completeness or factual absence. Read-only.',inputSchema:{type:'object',properties:{query:{type:'string',minLength:2,maxLength:200},ids:{type:'array',items:{type:'string'},minItems:1,maxItems:4},mode:{type:'string',enum:['focused','comparative','comprehensive']}},required:['query','ids'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]}
 
 ];
 async function callTool(name,args){
@@ -129,6 +142,7 @@ async function callTool(name,args){
   return result({documents:found.slice(0,limit),total:found.length,search_scope:'metadata',truncated:found.length>limit});
  }
  if(name==='search_content')return searchContent(args);
+ if(name==='retrieve_evidence')return retrieveEvidence(args);
  if(name==='get_document'||name==='get_document_metadata'||name==='get_document_structure'){
   const id=String(args.id||'');if(!id.startsWith('private:')||!permitted(id.slice(8)))return fail('Only categorized private document identifiers are allowed');
   const docs=await entries();const doc=docs.find(d=>d.id===id);
