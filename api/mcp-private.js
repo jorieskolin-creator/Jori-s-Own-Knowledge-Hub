@@ -2,6 +2,7 @@
 const {list,get}=require('@vercel/blob');
 const {Readable}=require('node:stream');
 const {pdfText}=require('./_pdf');
+const {htmlStructure}=require('./_structure');
 const OAuth=require('./_oauth');
 const VERSION='2025-03-26';
 const CATS={
@@ -58,13 +59,20 @@ async function getContent(doc,options={}){
  return {text:text.slice(0,MAX_TEXT),truncated:text.length>MAX_TEXT,extraction:'html-text'};
 }
 
+async function inspectStructure(doc){
+ if(!permitted(doc.pathname)||doc.access!=='private')throw Error('Not permitted');
+ const file=await get(doc.pathname,{access:'private',storeId:storeId()});
+ if(!file||!file.stream)throw Error('Document not found');
+ return doc.mime_type==='application/pdf'?pdfText(file,{structure_only:true}):htmlStructure(file);
+}
 function result(value){return {content:[{type:'text',text:JSON.stringify(value)}],structuredContent:value,isError:false}}
 function fail(message){return {content:[{type:'text',text:String(message)}],isError:true}}
 const TOOLS=[
  {name:'list_documents',description:'List private Knowledge Hub documents in the six explicit storage categories. Root-level files are excluded; access requires OAuth.',inputSchema:{type:'object',properties:{category:{type:'string'},subfolder:{type:'string'},limit:{type:'integer',minimum:1,maximum:100}},additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]},
  {name:'search_documents',description:'Search private Knowledge Hub document titles, categories, paths, and display groups. Metadata search only; not full-text.',inputSchema:{type:'object',properties:{query:{type:'string'},limit:{type:'integer',minimum:1,maximum:50}},required:['query'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]},
  {name:'get_document_metadata',description:'Fetch source metadata for a private Knowledge Hub document by its private:path identifier.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]},
- {name:'get_document',description:'Read HTML text or PDF text with page numbers, extraction status and an optional PDF page_start/page_end (maximum 10 pages). Requires OAuth and returns only Private Blob documents. No modifications.',inputSchema:{type:'object',properties:{id:{type:'string'},page_start:{type:'integer',minimum:1},page_end:{type:'integer',minimum:1}},required:['id'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]}
+ {name:'get_document',description:'Read HTML text or PDF text with page numbers, extraction status and an optional PDF page_start/page_end (maximum 10 pages). Requires OAuth and returns only Private Blob documents. No modifications.',inputSchema:{type:'object',properties:{id:{type:'string'},page_start:{type:'integer',minimum:1},page_end:{type:'integer',minimum:1}},required:['id'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]} ,{name:'get_document_structure',description:'Inspect the complete Private document on demand and report page/heading structure, extraction coverage, OCR gaps and processing limits without returning full source text.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]}
+
 ];
 async function callTool(name,args){
  if(name==='list_documents'){
@@ -78,11 +86,12 @@ async function callTool(name,args){
   const limit=Math.min(50,Math.max(1,Number(args.limit)||20));
   return result({documents:found.slice(0,limit),total:found.length,search_scope:'metadata',truncated:found.length>limit});
  }
- if(name==='get_document'||name==='get_document_metadata'){
+ if(name==='get_document'||name==='get_document_metadata'||name==='get_document_structure'){
   const id=String(args.id||'');if(!id.startsWith('private:')||!permitted(id.slice(8)))return fail('Only categorized private document identifiers are allowed');
   const docs=await entries();const doc=docs.find(d=>d.id===id);
   if(!doc)return fail('Document not found in Private catalog');
   if(name==='get_document_metadata')return result(doc);
+  if(name==='get_document_structure')return result({...doc,...await inspectStructure(doc)});
   const body=await getContent(doc,args);return result({...doc,...body});
  }
  return fail('Unknown tool');
