@@ -69,8 +69,8 @@ async function htmlSegments(file){
   indexed_sections:sections.length,indexed_segments:segments.length,source_bytes:size,
   limitations:['HTML visual, image and script content is not semantically interpreted.']}};
 }
-async function pdfSegments(file){
- const data=await pdfText(file,{search_all:true});
+async function pdfSegments(file,timeoutMs){
+ const data=await pdfText(file,{search_all:true,timeout_ms:timeoutMs});
  const segments=data.pages.flatMap(p=>windows(p.text).map(w=>({
   page:p.page,section:null,heading:null,start:w.start,end:w.end,text:w.text
  })));
@@ -104,9 +104,9 @@ function searchSegments(segments,query,limit=10){
  ranked.sort((a,b)=>b.score-a.score||(a.page||0)-(b.page||0)||(a.section||0)-(b.section||0)||a.start-b.start);
  return {matches:ranked.slice(0,limit),total_matches:ranked.length,results_truncated:ranked.length>limit};
 }
-async function searchFile(file,mime,query,limit){
+async function searchFile(file,mime,query,limit,timeoutMs){
  termsOf(query);
- const index=mime==='application/pdf'?await pdfSegments(file):await htmlSegments(file);
+ const index=mime==='application/pdf'?await pdfSegments(file,timeoutMs):await htmlSegments(file);
  return {...searchSegments(index.segments,query,limit),coverage:index.coverage};
 }
 module.exports={searchFile,searchSegments,pdfSegments,htmlSegments,termsOf,windows,MAX_RESULTS,MAX_DOCUMENTS};
