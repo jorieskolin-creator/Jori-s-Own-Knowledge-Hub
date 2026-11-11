@@ -172,3 +172,46 @@ test('Legacy Master Table records gain fields without losing existing summaries'
  assert.equal(upgraded.review_notes,'');
  assert.equal(upgraded.source_metadata_title,'Legacy');
 });
+
+test('Reviewed JSON import preserves manual entries and supersedes AI-only fields',async()=>{
+ const source=fs.readFileSync(require('node:path').join(__dirname,'../api/master-table.js'),'utf8');
+ const ai=entryFromDoc(doc('public','AI'));
+ ai.summary='Unreviewed AI-only text';ai.enrichment='AI';
+ const manual=normalizeEdit(entryFromDoc(doc('private','Manual')),{summary:''});
+ const empty=entryFromDoc(doc('private','Empty'));
+ let table={schema_version:1,records:[ai,manual,empty]},version='v1',writes=0;
+ const dependencies={
+  './_auth':{valid:()=>true,postBody:req=>req.body,send:(res,status,data)=>{
+   res.statusCode=status;res.payload=data;return res;
+  }},
+  './_master_table':{
+   readMaster:async()=>({table:structuredClone(table),etag:version}),
+   writeMaster:async(next,etag)=>{assert.equal(etag,version);table=next;version='v'+(++writes+1);},
+   sourceInventory:async()=>({documents:[],failures:[]}),reconcile:()=>{throw Error('Not used')},
+   normalizeEdit,descriptionHealth,MASTER_TABLE_FORMAT:'1.0'
+  },
+  './_master_enrich':{extractPublic:()=>{throw Error('Do not enrich on import')},
+   callModel:()=>{throw Error('Do not enrich on import')}}
+ };
+ const loaded={exports:{}};
+ new Function('require','module','exports',source)(name=>dependencies[name],loaded,loaded.exports);
+ const response={statusCode:200,payload:null,setHeader(){return this}};
+ const importedDate='2026-11-11T14:41:00.000Z';
+ await loaded.exports({method:'POST',headers:{host:'hub.example',origin:'https://hub.example'},
+  body:{action:'import',expected_etag:'v1',records:[
+   {id:ai.id,summary:'Approved human summary',review_notes:'Observed text only',
+    review_version:'v1.0',text_extraction:'COMPLETE',visual_inspection:'NOT_ASSESSED',last_reviewed:importedDate},
+   {id:manual.id,summary:'Should never overwrite manually saved empty entry'},
+   {id:empty.id,summary:'Approved text',review_notes:'Visuals not assessed'}
+  ]}},response);
+ assert.equal(response.statusCode,200);
+ assert.equal(response.payload.imported,2);
+ assert.equal(response.payload.skipped,1);
+ assert.equal(writes,1);
+ assert.equal(table.records[0].summary,'Approved human summary');
+ assert.equal(table.records[0].last_reviewed,importedDate);
+ assert.equal(table.records[0].review_notes,'Observed text only');
+ assert.equal(table.records[0].review_status,'Approved');
+ assert.equal(table.records[1].summary,'');
+ assert.equal(table.records[2].review_status,'Approved');
+});
