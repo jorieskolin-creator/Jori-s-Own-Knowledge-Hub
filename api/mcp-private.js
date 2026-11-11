@@ -3,6 +3,7 @@ const {list,get}=require('@vercel/blob');
 const {Readable}=require('node:stream');
 const {pdfText}=require('./_pdf');
 const {htmlStructure}=require('./_structure');
+const {searchFile,termsOf,MAX_RESULTS,MAX_DOCUMENTS}=require('./_content_search');
 const OAuth=require('./_oauth');
 const VERSION='2025-03-26';
 const CATS={
@@ -65,6 +66,42 @@ async function inspectStructure(doc){
  if(!file||!file.stream)throw Error('Document not found');
  return doc.mime_type==='application/pdf'?pdfText(file,{structure_only:true}):htmlStructure(file);
 }
+async function searchContent(args){
+ const query=String(args.query||'');
+ termsOf(query);
+ const ids=args.ids;
+ if(!Array.isArray(ids)||ids.length<1||ids.length>MAX_DOCUMENTS||new Set(ids).size!==ids.length)
+  return fail('Supply 1-4 distinct document IDs in ids; catalog-wide searching is not yet enabled');
+ const limit=args.limit===undefined?10:args.limit;
+ if(!Number.isSafeInteger(limit)||limit<1||limit>MAX_RESULTS)return fail('limit must be an integer from 1 to 20');
+ if(!ids.every(id=>typeof id==='string'&&id.startsWith('private:')&&permitted(id.slice(8))))
+  return fail('Only categorized private document IDs are permitted');
+ const docs=await entries();
+ const chosen=ids.map(id=>docs.find(d=>d.id===id));
+ if(chosen.some(d=>!d))return fail('A requested document was not found within the authorized catalog');
+ const matches=[],inspected=[],failures=[];
+ for(const doc of chosen){
+  try{
+   const file=await get(doc.pathname,{access:'private',storeId:storeId()});
+   if(!file||!file.stream)throw Error('Document unavailable');
+   const index=await searchFile(file,doc.mime_type,query,MAX_RESULTS);
+   inspected.push({id:doc.id,pathname:doc.pathname,...index.coverage,matching_segments:index.total_matches,
+     results_truncated:index.results_truncated});
+   matches.push(...index.matches.map(m=>({id:doc.id,title:doc.title,pathname:doc.pathname,...m})));
+  }catch(_error){
+   failures.push({id:doc.id,reason:'Document could not be fully indexed within processing limits'});
+  }
+ }
+ matches.sort((a,b)=>b.score-a.score||a.pathname.localeCompare(b.pathname)||(a.page||0)-(b.page||0)||a.start-b.start);
+ const selected=matches.slice(0,limit);
+ return result({query,search_scope:'explicit_document_ids',search_method:'deterministic_lexical',
+  searched_documents:inspected.length,requested_documents:ids.length,documents:inspected,
+  failures,matches:selected,returned_matches:selected.length,
+  matches_truncated:matches.length>limit||inspected.some(x=>x.results_truncated),
+  retrieval_complete:failures.length===0&&inspected.every(x=>x.extraction_complete),
+  limitations:['Lexical matching does not establish semantic completeness or verified absence.',
+  'Only explicitly selected documents were examined; diagrams and scanned pages may contain unseen information.']});
+}
 function result(value){return {content:[{type:'text',text:JSON.stringify(value)}],structuredContent:value,isError:false}}
 function fail(message){return {content:[{type:'text',text:String(message)}],isError:true}}
 const TOOLS=[
@@ -72,6 +109,7 @@ const TOOLS=[
  {name:'search_documents',description:'Search private Knowledge Hub document titles, categories, paths, and display groups. Metadata search only; not full-text.',inputSchema:{type:'object',properties:{query:{type:'string'},limit:{type:'integer',minimum:1,maximum:50}},required:['query'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]},
  {name:'get_document_metadata',description:'Fetch source metadata for a private Knowledge Hub document by its private:path identifier.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]},
  {name:'get_document',description:'Read HTML text or PDF text with page numbers, extraction status and an optional PDF page_start/page_end (maximum 10 pages). Requires OAuth and returns only Private Blob documents. No modifications.',inputSchema:{type:'object',properties:{id:{type:'string'},page_start:{type:'integer',minimum:1},page_end:{type:'integer',minimum:1}},required:['id'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]} ,{name:'get_document_structure',description:'Inspect the complete Private document on demand and report page/heading structure, extraction coverage, OCR gaps and processing limits without returning full source text.',inputSchema:{type:'object',properties:{id:{type:'string'}},required:['id'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]}
+ ,{name:'search_content',description:'Search actual text within 1-4 explicitly selected private PDF/HTML documents. Examines all available PDF pages and HTML sections, returns ranked source-located passages and coverage/gap metadata. Deterministic and read-only; not a whole-library search.',inputSchema:{type:'object',properties:{query:{type:'string',minLength:2,maxLength:200},ids:{type:'array',items:{type:'string'},minItems:1,maxItems:4},limit:{type:'integer',minimum:1,maximum:20}},required:['query','ids'],additionalProperties:false},annotations:{readOnlyHint:true},securitySchemes:[{type:'oauth2',scopes:['documents:read']}]}
 
 ];
 async function callTool(name,args){
@@ -86,6 +124,7 @@ async function callTool(name,args){
   const limit=Math.min(50,Math.max(1,Number(args.limit)||20));
   return result({documents:found.slice(0,limit),total:found.length,search_scope:'metadata',truncated:found.length>limit});
  }
+ if(name==='search_content')return searchContent(args);
  if(name==='get_document'||name==='get_document_metadata'||name==='get_document_structure'){
   const id=String(args.id||'');if(!id.startsWith('private:')||!permitted(id.slice(8)))return fail('Only categorized private document identifiers are allowed');
   const docs=await entries();const doc=docs.find(d=>d.id===id);
