@@ -7,6 +7,9 @@ const {Readable}=require('node:stream');
 const STORE_ID=()=>process.env.PRIVATE_BLOB_STORE_ID||'store_YAAwH6FewcrImhA1';
 const MASTER_PATH='_knowledge-system/master-table-v1.json';
 const MAX_MASTER_BYTES=3*1024*1024;
+const MASTER_TABLE_FORMAT='1.0';
+const TEXT_EXTRACTION=['NOT_ASSESSED','COMPLETE','PARTIAL','FAILED'];
+const VISUAL_INSPECTION=['NOT_ASSESSED','COMPLETE','PARTIAL'];
 const CATS=new Set(['01-solutions','02-frameworks','03-general-presentations','04-shared-knowledge','05-random','06-personal']);
 function masterEmpty(){return {schema_version:1,updated_at:null,records:[]};}
 function permitted(path){return typeof path==='string'&&path.length<=1024&&
@@ -21,6 +24,29 @@ function strings(input,max=30){
   const val=text(item,100);if(val&&!seen.has(val.toLowerCase())){found.push(val);seen.add(val.toLowerCase());}}
  if(found.length>max)throw Error('Too many list entries');return found;
 }
+function coverageState(value,allowed){
+ const state=String(value??'NOT_ASSESSED').trim().toUpperCase().replace(/[\s-]+/g,'_');
+ const normalized=state==='NOT_INSPECTED'||state==='MANUAL'?'NOT_ASSESSED':state;
+ if(!allowed.includes(normalized))throw Error('Invalid review coverage value');
+ return normalized;
+}
+function sourceTitle(path){
+ return String(path||'').split('/').at(-1).replace(/\.(?:html?|pdf)$/i,'').replace(/[-_]+/g,' ').replace(/\s+/g,' ').trim();
+}
+function withReviewFields(entry){
+ // Additive compatibility for Master Table records created before Format 1.0.
+ const e={...entry};
+ e.source_metadata_title=e.source_metadata_title??sourceTitle(e.pathname);
+ e.source_hash=e.source_hash??null; // Reserved for a verified SHA-256 of the original file bytes.
+ e.review_notes=e.review_notes??'';
+ e.review_status=e.review_status??null; // Not an approval workflow; Save sets Approved.
+ e.review_version=e.review_version??'';
+ e.last_reviewed=e.last_reviewed??null;
+ const old=e.extraction_status==='NOT_INSPECTED'||e.extraction_status==='MANUAL'?'NOT_ASSESSED':e.extraction_status;
+ e.text_extraction=coverageState(e.text_extraction??old??'NOT_ASSESSED',TEXT_EXTRACTION);
+ e.visual_inspection=coverageState(e.visual_inspection??'NOT_ASSESSED',VISUAL_INSPECTION);
+ return e;
+}
 function sourceSignature(d){return crypto.createHash('sha256').update([d.id,d.updated||'',d.size||0].join('|')).digest('hex');}
 function entryFromDoc(d){
  const path=d.pathname,part=path.split('/');
@@ -28,13 +54,16 @@ function entryFromDoc(d){
   title:text(d.title||part.at(-1).replace(/\.(?:html?|pdf)$/i,''),220),
   category:part[0],folder:part.slice(1,-1).join('/'),mime_type:d.mime_type||(/\.pdf$/i.test(path)?'application/pdf':'text/html'),
   source_updated:d.updated||null,source_size:d.size??null,source_signature:sourceSignature(d),
-  source_available:true,source_changed:false,
+  source_available:true,source_changed:false,source_hash:null,
+  source_metadata_title:text(d.title||sourceTitle(path),220),
   summary:'',key_terms:[],themes:[],document_type:'',important_sections:[],related_documents:[],
+  review_notes:'',review_status:null,review_version:'',last_reviewed:null,
+  text_extraction:'NOT_ASSESSED',visual_inspection:'NOT_ASSESSED',
   extraction_status:'NOT_INSPECTED',enrichment:'NONE',last_saved:null};
 }
-function normalizeEdit(entry,changes){
+function normalizeEdit(entry,changes,options={}){
  if(!changes||typeof changes!=='object'||Array.isArray(changes))throw Error('Invalid changes');
- const out={...entry};
+ const out=withReviewFields(entry);
  if('title'in changes)out.title=text(changes.title,220);
  if('summary'in changes){if(typeof changes.summary!=='string'||changes.summary.length>2400)throw Error('Summary must be text up to 2400 characters');out.summary=changes.summary.trim();}
  if('key_terms'in changes)out.key_terms=strings(changes.key_terms,40);
@@ -42,8 +71,31 @@ function normalizeEdit(entry,changes){
  if('document_type'in changes)out.document_type=text(changes.document_type,100);
  if('important_sections'in changes)out.important_sections=strings(changes.important_sections,60);
  if('related_documents'in changes)out.related_documents=strings(changes.related_documents,30);
- if('extraction_status'in changes&&['COMPLETE','PARTIAL','NOT_INSPECTED','FAILED','MANUAL'].includes(changes.extraction_status))
-  out.extraction_status=changes.extraction_status;
+ if('review_notes'in changes){
+  if(typeof changes.review_notes!=='string'||changes.review_notes.length>6000)throw Error('Review notes must be text up to 6000 characters');
+  out.review_notes=changes.review_notes.trim();
+ }
+ if('review_version'in changes){
+  if(typeof changes.review_version!=='string'||changes.review_version.length>50)throw Error('Invalid review version');
+  out.review_version=changes.review_version.trim();
+ }
+ if('text_extraction'in changes){
+  out.text_extraction=coverageState(changes.text_extraction,TEXT_EXTRACTION);
+  out.extraction_status=out.text_extraction==='NOT_ASSESSED'?'NOT_INSPECTED':out.text_extraction;
+ }else if('extraction_status'in changes){
+  // Legacy enrichment clients can still supply the previous field.
+  out.text_extraction=coverageState(changes.extraction_status,TEXT_EXTRACTION);
+  out.extraction_status=out.text_extraction==='NOT_ASSESSED'?'NOT_INSPECTED':out.text_extraction;
+ }
+ if('visual_inspection'in changes)out.visual_inspection=coverageState(changes.visual_inspection,VISUAL_INSPECTION);
+ if(options.markApproved!==false){
+  out.review_status='Approved';
+  if(options.reviewedAt!==undefined&&options.reviewedAt!==null){
+   const time=Date.parse(options.reviewedAt);
+   if(!Number.isFinite(time))throw Error('Invalid last reviewed date');
+   out.last_reviewed=new Date(time).toISOString();
+  }else out.last_reviewed=new Date().toISOString();
+ }
  out.last_saved=new Date().toISOString();
  if(entry.access==='private')out.enrichment='MANUAL';
  else if(changes.enrichment==='AI')out.enrichment='AI'; else out.enrichment='MANUAL';
@@ -73,7 +125,7 @@ async function readMaster(){
  if(!file||!file.stream)throw Error('Master Table could not be read');
  const table=JSON.parse(await readBytes(file,MAX_MASTER_BYTES));
  if(table.schema_version!==1||!Array.isArray(table.records))throw Error('Unsupported Master Table schema');
- return {table,etag:info.etag};
+ return {table:{...table,records:table.records.map(withReviewFields)},etag:info.etag};
 }
 async function writeMaster(table,etag){
  const body=JSON.stringify({...table,schema_version:1,updated_at:new Date().toISOString()});
@@ -122,5 +174,6 @@ function reconcile(table,documents,successfulScopes){
  const records=[...existing.values()].sort((a,b)=>a.access.localeCompare(b.access)||a.title.localeCompare(b.title));
  return {table:{...table,records},added,changed,missing};
 }
-module.exports={MASTER_PATH,STORE_ID,masterEmpty,permitted,words,strings,sourceSignature,
+module.exports={MASTER_PATH,STORE_ID,MASTER_TABLE_FORMAT,TEXT_EXTRACTION,VISUAL_INSPECTION,
+ masterEmpty,permitted,words,strings,sourceSignature,sourceTitle,withReviewFields,coverageState,
  entryFromDoc,normalizeEdit,descriptionHealth,readMaster,writeMaster,sourceInventory,reconcile};
