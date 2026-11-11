@@ -35,7 +35,9 @@ async function pdfText(file,options={}){
   const PDFParser=mod.PDFParser||mod.default||mod;
   const parser=new PDFParser(null,false);
   let done=false;
-  const timeout=setTimeout(()=>finish(new Error('PDF extraction time limit exceeded')),PARSE_TIMEOUT_MS);
+  const requestedTimeout=Number.isFinite(options.timeout_ms)?Math.floor(options.timeout_ms):PARSE_TIMEOUT_MS;
+  const timeoutMs=Math.max(1000,Math.min(PARSE_TIMEOUT_MS,requestedTimeout));
+  const timeout=setTimeout(()=>finish(new Error('PDF extraction time limit exceeded')),timeoutMs);
   function finish(error,value){
    if(done)return;
    done=true;clearTimeout(timeout);
