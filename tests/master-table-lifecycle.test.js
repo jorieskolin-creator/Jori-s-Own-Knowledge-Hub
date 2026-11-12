@@ -48,7 +48,7 @@ test('Legacy Master Table gains an approved snapshot without losing records or r
  staged.records[0]=normalizeEdit(staged.records[0],{summary:'Now staged'});
  assert.equal(staged.published_records[0].summary,'Previously live summary');
 });
-test('Obsolete records are preserved for explicit source retrieval but omitted from default discovery',async()=>{
+test('Obsolete records remain stored but are not eligible for normal evidence retrieval or discovery',async()=>{
  const a=doc('Legacy'),b=doc('Latest'),c=doc('Unreviewed');
  const aEntry=normalizeEdit(entryFromDoc(a),{review_status:'Obsolete',summary:'Quantum comparison of versions'});
  const bEntry=normalizeEdit(entryFromDoc(b),{review_status:'Approved',summary:'Quantum comparison of versions'});
@@ -61,8 +61,8 @@ test('Obsolete records are preserved for explicit source retrieval but omitted f
  assert.equal(answer.candidates[0].review_status,'Approved');
  assert.equal(records.some(x=>x.id===a.id),true);
  const draft=await discover('Unreviewed','private',all,12,records);
- assert.equal(draft.candidates[0].source_kind,'metadata_fallback');
- assert.equal(draft.candidates[0].summary_available,false);
+ assert.equal(draft.candidates_found,0);
+ assert.deepEqual(draft.candidates,[]);
 });
 test('Unpublished Approved edits cannot affect discovery until Master Table is approved',async()=>{
  const d=doc('OriginalTitle'),original=normalizeEdit(entryFromDoc(d),{review_status:'Approved',
