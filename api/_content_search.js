@@ -1,6 +1,7 @@
 'use strict';
 // Deterministic, ephemeral lexical retrieval. No remote AI and no storage writes.
 const {Readable}=require('node:stream');
+const {createHash}=require('node:crypto');
 const {pdfText}=require('./_pdf');
 const MAX_HTML_BYTES=6*1024*1024;
 const MAX_RESULTS=20;
@@ -42,7 +43,9 @@ async function htmlSegments(file){
   if(size>MAX_HTML_BYTES)throw new RangeError('HTML size exceeds 6 MB');
   parts.push(p);
  }
- const source=Buffer.concat(parts,size).toString('utf8');
+ const originalBytes=Buffer.concat(parts,size);
+ const original_file_sha256=createHash('sha256').update(originalBytes).digest('hex');
+ const source=originalBytes.toString('utf8');
  const cleaned=source.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi,' ')
    .replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi,' ');
  const heads=/<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1\s*>/gi;
@@ -65,7 +68,7 @@ async function htmlSegments(file){
   page:null,section:section.section,heading:section.heading,heading_level:section.level,
   start:w.start,end:w.end,text:w.text
  })));
- return {segments,coverage:{document_type:'html',extraction_complete:true,
+ return {segments,coverage:{document_type:'html',original_file_sha256,extraction_complete:true,
   indexed_sections:sections.length,indexed_segments:segments.length,source_bytes:size,
   limitations:['HTML visual, image and script content is not semantically interpreted.']}};
 }
@@ -74,7 +77,7 @@ async function pdfSegments(file,timeoutMs){
  const segments=data.pages.flatMap(p=>windows(p.text).map(w=>({
   page:p.page,section:null,heading:null,start:w.start,end:w.end,text:w.text
  })));
- return {segments,coverage:{document_type:'pdf',total_pages:data.total_pages,
+ return {segments,coverage:{document_type:'pdf',original_file_sha256:data.original_file_sha256,total_pages:data.total_pages,
   examined_pages:data.examined_pages,text_pages:data.total_pages-data.ocr_required_pages.length,
   ocr_required_pages:data.ocr_required_pages,extraction_complete:data.extraction_complete,
   indexed_segments:segments.length,
