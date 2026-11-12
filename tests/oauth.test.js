@@ -13,7 +13,8 @@ function fakeResponse(){
   setHeader(k,v){this.headers[k.toLowerCase()]=v;return this},
   getHeader(k){return this.headers[k.toLowerCase()]},
   end(s=''){this.text=String(s);return this},
-  status(s){this.statusCode=s;return this}
+  status(s){this.statusCode=s;return this},
+   json(payload){this.text=JSON.stringify(payload);return this}
  };
 }
 async function request(handler,method,query={},body={},headers={}){
