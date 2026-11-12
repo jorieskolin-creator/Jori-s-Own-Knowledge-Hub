@@ -1,5 +1,6 @@
 'use strict';
 const {Readable}=require('node:stream');
+const {createHash}=require('node:crypto');
 const MAX_BYTES=8*1024*1024;
 const MAX_CHARS=45000;
 const MAX_PAGES=10;
@@ -29,6 +30,7 @@ async function pdfText(file,options={}){
  const searchAll=options.search_all===true;
  const range=(structureOnly||searchAll)?null:pageRange(options);
  const bytes=await toBuffer(file);
+ const original_file_sha256=createHash('sha256').update(bytes).digest('hex'); // Full original PDF bytes.
  if(bytes.subarray(0,5).toString('ascii')!=='%PDF-')throw Error('File is not a valid PDF');
  const pdf=await new Promise((resolve,reject)=>{
   const mod=require('pdf2json');
@@ -91,7 +93,7 @@ async function pdfText(file,options={}){
   if(structureOnly){
    const needsOcr=manifest.filter(p=>p.extraction==='ocr-required').map(p=>p.page);
    const extracted=manifest.length-needsOcr.length;
-   return {document_type:'pdf',total_pages:totalPages,examined_pages:manifest.length,
+   return {document_type:'pdf',original_file_sha256,total_pages:totalPages,examined_pages:manifest.length,
     text_pages:extracted,ocr_required_pages:needsOcr,pages:manifest,
     extraction_coverage:manifest.length/totalPages,
     text_layer_coverage:extracted/totalPages,
@@ -101,12 +103,12 @@ async function pdfText(file,options={}){
   }
   if(searchAll){
    const ocr_required_pages=pages.filter(p=>p.extraction==='ocr-required').map(p=>p.page);
-   return {pages,total_pages:totalPages,examined_pages:pages.length,ocr_required_pages,
+   return {pages,original_file_sha256,total_pages:totalPages,examined_pages:pages.length,ocr_required_pages,
     extraction_complete:ocr_required_pages.length===0&&pages.length===totalPages,
     extraction:'pdf-full-text',truncated:false};
   }
   const needsOcr=pages.filter(p=>p.extraction==='ocr-required').map(p=>p.page);
- return {text:pages.map(p=>'[Page '+p.page+']\n'+p.text).join('\n\n'),pages,total_pages:totalPages,
+ return {text:pages.map(p=>'[Page '+p.page+']\n'+p.text).join('\n\n'),pages,original_file_sha256,total_pages:totalPages,
    requested_pages:{start:range.start,end:last},
    extraction:needsOcr.length?'pdf-text-partial':'pdf-text',ocr_required_pages:needsOcr,
    truncated:truncated||range.end<totalPages};
