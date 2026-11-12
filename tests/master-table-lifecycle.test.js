@@ -83,3 +83,50 @@ test('Admin UI separates entry Save from explicit whole-table Save and Approve',
  assert.doesNotMatch(src,/Review status \(Save = Approved\)/);
  assert.doesNotThrow(()=>new Function(src));
 });
+
+test('Admin API stages a document change and publishes only after explicit whole-table approval',async()=>{
+ const source=fs.readFileSync(require('node:path').join(__dirname,'../api/master-table.js'),'utf8');
+ const x=normalizeEdit(entryFromDoc(doc('Legacy')),{review_status:'Approved',summary:'Original published summary'});
+ let table=approveTable({schema_version:1,records:[x]}),etag='rev0',writes=0;
+ const model={
+  './_auth':{valid:()=>true,postBody:req=>req.body,send:(res,status,payload)=>{
+   res.statusCode=status;res.payload=payload;return res;
+  }},
+  './_master_table':{
+   readMaster:async()=>({table:withPublication(structuredClone(table)),etag}),
+   writeMaster:async(next,expected)=>{
+    assert.equal(expected,etag);table=structuredClone(next);etag='rev'+(++writes);
+   },
+   sourceInventory:async()=>({documents:[],failures:[]}),
+   reconcile:()=>{throw Error('Not used')},normalizeEdit,stageTable,approveTable,withPublication,
+   inspectSourceLinks:()=>[],descriptionHealth:()=>({summary_words:3}),
+   MASTER_TABLE_FORMAT:'1.0'
+  },
+  './_master_enrich':{extractPublic:()=>{throw Error('Not used')},callModel:()=>{throw Error('Not used')}}
+ };
+ const loaded={exports:{}};
+ new Function('require','module','exports',source)(name=>model[name],loaded,loaded.exports);
+ async function post(action,params={}){
+  const res={statusCode:200,payload:null,setHeader(){return this}};
+  await loaded.exports({method:'POST',headers:{origin:'https://hub.example',host:'hub.example'},
+   body:{action,expected_etag:etag,...params}},res);return res;
+ }
+ const staged=await post('save',{id:x.id,changes:{review_status:'Obsolete',summary:'Historical version'}});
+ assert.equal(staged.statusCode,200);
+ assert.equal(staged.payload.record.review_status,'Obsolete');
+ assert.equal(table.publication.status,'Draft');
+ assert.equal(table.records[0].review_status,'Obsolete');
+ assert.equal(table.published_records[0].review_status,'Approved');
+ assert.equal(table.published_records[0].summary,'Original published summary');
+ const liveBefore=await discover('Legacy','private',[doc('Legacy')],10,table.published_records);
+ assert.equal(liveBefore.candidates_found,1);
+ const result=await post('approve');
+ assert.equal(result.statusCode,200);
+ assert.equal(result.payload.approved,true);
+ assert.equal(result.payload.by_status.Obsolete,1);
+ assert.equal(table.publication.status,'Approved');
+ assert.equal(table.published_records[0].review_status,'Obsolete');
+ const liveAfter=await discover('Legacy','private',[doc('Legacy')],10,table.published_records);
+ assert.equal(liveAfter.candidates_found,0);
+ assert.equal(liveAfter.obsolete_count,1);
+});
