@@ -259,3 +259,17 @@ To test Knowledge Hub as an independent **source of governed evidence**, use the
 The existing `/api/mcp` and `/api/mcp-private` endpoints retain unrestricted **authorized** document reading for normal use. For a valid evidence-only acceptance test, connect only the governed endpoint. The model must be instructed to use released Evidence Package passages exclusively, and to report unsupported claims rather than reading the document independently.
 
 Read [the governed evidence mode guide](docs/governed-evidence-mode.md) for tool contracts, delivery decisions, consumer isolation and repeatable acceptance tests. This route reuses the existing bounded deterministic retrieval kernel. It does not claim semantic completeness, privacy clearance or verification of absence.
+
+## Unified Governed Evidence MCP — Public and Private
+
+**Preferred single-connection endpoint:** `https://jori-knowledge-hub.vercel.app/api/mcp-governed-unified`.
+
+Create a custom MCP connection named **Jori's Knowledge Hub — Governed Evidence (Unified)** with **OAuth** and use the existing administrator login. The connection is bound to a new, exact resource audience and cannot use its token on the unrestricted Private document reader. Both Public and Private document inventories must be available, and each evidence passage retains its Public/Private source ID.
+
+The endpoint advertises seven metadata, discovery and Evidence Package operations. It cannot return full-document contents, raw source URLs, unverified Master Table summaries as factual evidence, or passage text from integrity-BLOCKed packages. The earlier Public-only and Private-only governed endpoints, and ordinary document-reading endpoints, remain supported for their original purposes.
+
+**Acceptance:** In a fresh conversation select only this unified connector, find one Public and one Private source ID, then call `retrieve_evidence` with both IDs. Verify the Evidence Package's per-source original-byte SHA-256, passage SHA-256, locators, status and limitations. Test an unsupported query and attempt `get_document` to confirm no direct reading or false absence. The Master Table need not be complete for explicit-ID tests.
+
+See [governed evidence mode](docs/governed-evidence-mode.md) for full setup and test instructions.
+
+**Privacy limitation:** Retrieval-integrity checks are **not** a recipient-specific sensitive-data egress/privacy clearance. Private passages may still contain information that should not be sent to particular external models. Apply applicable data-handling policies to stored material and connected model/consumer. The unified connector limits the material **available through this connection**; it cannot prevent a consuming application from using a separately connected unrestricted source.
