@@ -85,28 +85,41 @@ async function importEntries(res,body){
  // Initial reviewed Master Table JSON, not arbitrary HTML. Preserve authoritative inventory fields.
  if(!Array.isArray(body.records)||body.records.length>1000)return send(res,400,{error:'Expected records array of at most 1000 items'});
  const {table,etag}=await readMaster();requireExpected(etag,body);
- let modified=0,skipped=0;
+ let modified=0,skipped=0;const skipped_entries=[],version_review=[];const seen=new Set();
  for(const row of body.records){
   if(!row||typeof row.id!=='string'){skipped++;continue}
+  if(seen.has(row.id))throw Error('Invalid import: duplicate source ID');seen.add(row.id);
   const i=table.records.findIndex(e=>e.id===row.id);
-  if(i<0){skipped++;continue}
+  if(i<0){skipped++;skipped_entries.push({id:row.id,reason:'NOT_IN_INVENTORY'});continue}
   const existing=table.records[i];
   // Explicitly imported human-reviewed records take precedence over AI-only metadata.
   // Preserve any entry the administrator has previously saved manually.
   if(existing.enrichment==='MANUAL'||
      ((existing.summary||existing.key_terms?.length||existing.themes?.length)&&existing.enrichment!=='AI')){
-   skipped++;continue;
+   skipped++;skipped_entries.push({id:row.id,reason:'MANUALLY_MAINTAINED'});continue;
   }
   const changes={};
   for(const k of ['title','summary','key_terms','themes','document_type','important_sections','related_documents','related_source_ids',
-   'review_notes','review_version','review_status','text_extraction','visual_inspection'])
+   'review_notes','review_version','review_status','text_extraction','visual_inspection',
+   'reviewed_source_updated','reviewed_source_metadata_title','reported_source_hash',
+   'text_extraction_detail','visual_inspection_detail'])
    if(Object.prototype.hasOwnProperty.call(row,k))changes[k]=row[k];
   // The imported table has already been reviewed by the Admin. Preserve its
   // source-review timestamp when supplied; do not trust imported source hashes.
-  table.records[i]=normalizeEdit(existing,changes,{reviewedAt:row.last_reviewed??undefined,records:table.records});modified++;
+  const edited=normalizeEdit(existing,changes,{reviewedAt:row.last_reviewed??null,preserveReviewDate:true,
+   preserveSourceChanged:true,records:table.records});
+  // A catalog timestamp is a useful mismatch check, not proof of identical bytes.
+  // Existing change flags always require a separate deliberate source review.
+  if(edited.review_status==='Approved'){
+   const reviewed=Date.parse(edited.reviewed_source_updated),current=Date.parse(existing.source_updated);
+   if(!Number.isFinite(reviewed)||!Number.isFinite(current)||Math.floor(reviewed/1000)!==Math.floor(current/1000))
+    edited.source_changed=true;
+   if(edited.source_changed||!edited.source_available)version_review.push(row.id);
+  }
+  table.records[i]=edited;modified++;
  }
  if(modified)await writeMaster(stageTable(table),etag);
- return send(res,200,{imported:modified,skipped,
+ return send(res,200,{imported:modified,skipped,skipped_entries,version_review,
   manually_maintained_entries_preserved:true,ai_only_entries_may_be_replaced:true});
 }
 module.exports=async function(req,res){

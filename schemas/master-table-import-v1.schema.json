@@ -74,7 +74,7 @@
           "maxItems": 60,
           "items": {
             "type": "string",
-            "maxLength": 100
+            "maxLength": 500
           },
           "uniqueItems": true
         },
@@ -83,7 +83,7 @@
           "maxItems": 30,
           "items": {
             "type": "string",
-            "maxLength": 100
+            "maxLength": 500
           },
           "uniqueItems": true
         },
@@ -137,6 +137,34 @@
             "Obsolete"
           ],
           "description": "Optional explicit lifecycle status; absent values retain existing status, defaulting to Draft."
+        },
+        "reviewed_source_updated": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "description": "Source timestamp recorded in the reviewed table; compare with live inventory. Not proof of byte identity."
+        },
+        "reviewed_source_metadata_title": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "reported_source_hash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Hash reported by the review artifact, not a verified original-byte hash."
+        },
+        "text_extraction_detail": {
+          "type": "string",
+          "maxLength": 500
+        },
+        "visual_inspection_detail": {
+          "type": "string",
+          "maxLength": 500
         }
       }
     }
