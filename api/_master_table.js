@@ -38,6 +38,7 @@ function withReviewFields(entry){
  const e={...entry};
  e.source_metadata_title=e.source_metadata_title??sourceTitle(e.pathname);
  e.source_hash=e.source_hash??null; // Reserved for a verified SHA-256 of the original file bytes.
+ e.related_source_refs=Array.isArray(e.related_source_refs)?e.related_source_refs:[]; // Version-pinned IDs, not title guesses.
  e.review_notes=e.review_notes??'';
  e.review_status=e.review_status??null; // Not an approval workflow; Save sets Approved.
  e.review_version=e.review_version??'';
@@ -56,10 +57,37 @@ function entryFromDoc(d){
   source_updated:d.updated||null,source_size:d.size??null,source_signature:sourceSignature(d),
   source_available:true,source_changed:false,source_hash:null,
   source_metadata_title:text(d.title||sourceTitle(path),220),
-  summary:'',key_terms:[],themes:[],document_type:'',important_sections:[],related_documents:[],
+  summary:'',key_terms:[],themes:[],document_type:'',important_sections:[],related_documents:[],related_source_refs:[],
   review_notes:'',review_status:null,review_version:'',last_reviewed:null,
   text_extraction:'NOT_ASSESSED',visual_inspection:'NOT_ASSESSED',
   extraction_status:'NOT_INSPECTED',enrichment:'NONE',last_saved:null};
+}
+// Validated cross-document links are separate from free-text related document names.
+function bindRelatedSourceIds(source,ids,records){
+ if(!Array.isArray(ids)||ids.length>30)throw Error('Invalid related source IDs: expected at most 30');
+ if(!Array.isArray(records))throw Error('Invalid related source inventory');
+ const byId=new Map(records.map(r=>[r.id,r])),seen=new Set();
+ return ids.map(id=>{
+  if(typeof id!=='string'||!id.trim()||seen.has(id)||id===source.id)
+   throw Error('Invalid related source ID (empty, duplicate or self-reference)');
+  seen.add(id);
+  const target=byId.get(id);
+  if(!target||target.source_available===false||target.source_changed||
+     !/^[a-f0-9]{64}$/.test(target.source_signature||''))
+   throw Error('Invalid related source ID: target missing, unavailable, or stale');
+  if(source.access==='public'&&target.access==='private')
+   throw Error('Invalid related source ID: Public metadata cannot link to Private');
+  return {id,source_signature:target.source_signature};
+ });
+}
+function inspectSourceLinks(source,records){
+ const byId=new Map(records.map(r=>[r.id,r]));
+ return (source.related_source_refs||[]).map(ref=>{
+  const target=byId.get(ref.id);
+  const status=!target?'MISSING':target.source_available===false?'UNAVAILABLE':
+   target.source_changed||target.source_signature!==ref.source_signature?'STALE_VERSION':'CURRENT';
+  return {id:ref.id,source_signature:ref.source_signature,status};
+ });
 }
 function normalizeEdit(entry,changes,options={}){
  if(!changes||typeof changes!=='object'||Array.isArray(changes))throw Error('Invalid changes');
@@ -71,6 +99,7 @@ function normalizeEdit(entry,changes,options={}){
  if('document_type'in changes)out.document_type=text(changes.document_type,100);
  if('important_sections'in changes)out.important_sections=strings(changes.important_sections,60);
  if('related_documents'in changes)out.related_documents=strings(changes.related_documents,30);
+ if('related_source_ids'in changes)out.related_source_refs=bindRelatedSourceIds(entry,changes.related_source_ids,options.records);
  if('review_notes'in changes){
   if(typeof changes.review_notes!=='string'||changes.review_notes.length>6000)throw Error('Review notes must be text up to 6000 characters');
   out.review_notes=changes.review_notes.trim();
@@ -177,4 +206,4 @@ function reconcile(table,documents,successfulScopes){
 }
 module.exports={MASTER_PATH,STORE_ID,MASTER_TABLE_FORMAT,TEXT_EXTRACTION,VISUAL_INSPECTION,
  masterEmpty,permitted,words,strings,sourceSignature,sourceTitle,withReviewFields,coverageState,
- entryFromDoc,normalizeEdit,descriptionHealth,readMaster,writeMaster,sourceInventory,reconcile};
+ entryFromDoc,normalizeEdit,bindRelatedSourceIds,inspectSourceLinks,descriptionHealth,readMaster,writeMaster,sourceInventory,reconcile};
