@@ -24,7 +24,11 @@ function sanitizedDiscovery(report){
 }
 function releasePackage(pack){
  const q=pack&&typeof pack==='object'?evaluateRetrieval(pack):null;
- const compatible=pack?.schema_version===1&&pack?.retrieval_quality?.policy_version===POLICY_VERSION;
+ const compatible=pack?.schema_version===1&&pack?.retrieval_quality?.policy_version===POLICY_VERSION&&
+  pack?.evidence_sufficiency==='NOT_ASSESSED'&&
+  !pack?.verified_absence&&
+  Array.isArray(pack?.passages)&&Array.isArray(pack?.source_coverage)&&
+  Array.isArray(pack?.limitations)&&pack?.request?.requested_document_ids?.length>=1;
  const checked=q&&pack.retrieval_quality.status===q.status&&
    JSON.stringify(pack.retrieval_quality.blocking_reasons)===JSON.stringify(q.blocking_reasons)&&
    JSON.stringify(pack.retrieval_quality.warnings)===JSON.stringify(q.warnings);
@@ -36,7 +40,7 @@ function releasePackage(pack){
   governed_mode:'EVIDENCE_ONLY',delivery_policy:POLICY,delivery_status,
   source_text_access:'EVIDENCE_PACKAGES_ONLY',
   evidence_contract_version:1,retrieval_quality:q,
-  evidence:invalid||empty?null:pack,
+  evidence:invalid||empty?null:{...pack,retrieval_quality:q},
   limitations:[
    'Only passages inside a released Evidence Package may support a factual answer. Catalog metadata is discovery context only.',
    'PASS and WARN concern retrieval integrity, not factual truth, semantic completeness or evidence sufficiency.',
