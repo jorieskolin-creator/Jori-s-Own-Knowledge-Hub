@@ -15,19 +15,19 @@ function tool(name,description,properties={},required=[]){
   annotations:READ_ONLY,securitySchemes:SECURITY};
 }
 const TOOLS=[
- tool('list_documents','List categorized source metadata from both authorized Public and Private stores. No raw URLs or document bodies.',
+ tool('list_documents','List only Approved documents from the last published Master Table across Public and Private stores. No raw URLs or document bodies.',
   {category:{type:'string'},subfolder:{type:'string'},limit:{type:'integer',minimum:1,maximum:100}}),
- tool('search_documents','Search metadata only across Public and Private sources; metadata does not count as evidence.',
+ tool('search_documents','Search metadata for Approved documents only; metadata is not evidence.',
   {query:{type:'string',minLength:1,maxLength:200},limit:{type:'integer',minimum:1,maximum:50}},['query']),
- tool('get_document_metadata','Retrieve metadata for a Public or Private source ID; never returns its document body.',
+ tool('get_document_metadata','Retrieve metadata for an Approved Public or Private source ID only; never returns its document body.',
   {id:ID},['id']),
- tool('discover_sources','Rank Public and Private candidates using current Master Table metadata and title/path fallback; not proof of recall.',
+ tool('discover_sources','Rank only Approved Public and Private documents in the last published Master Table; no Draft, Obsolete or unindexed fallback.',
   {query:QUERY,limit:{type:'integer',minimum:1,maximum:30}},['query']),
- tool('retrieve_evidence','Acquire deterministic bounded Evidence Packages from 1–4 explicit Public/Private IDs; only integrity-gated passages are released.',
+ tool('retrieve_evidence','Acquire deterministic bounded Evidence Packages only from 1–4 Approved Public/Private IDs; status and source version are validated server-side.',
   {query:QUERY,ids:IDS,mode:MODE},['query','ids']),
- tool('retrieve_topic_evidence','Discover across Public and Private and acquire one governed package from up to four top-ranked candidate IDs.',
+ tool('retrieve_topic_evidence','Discover Approved sources across both scopes and acquire one governed package from up to four top-ranked candidates.',
   {query:QUERY,mode:MODE},['query']),
- tool('verify_coverage','Recheck deterministic integrity without returning passage text, for up to four explicit Public/Private source IDs.',
+ tool('verify_coverage','Recheck deterministic integrity for 1–4 Approved Public/Private sources without returning passage text.',
   {query:QUERY,ids:IDS,mode:MODE},['query','ids'])
 ];
 function send(res,status,value){
