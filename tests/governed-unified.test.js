@@ -183,7 +183,7 @@ test('Master Table discovery hints cannot become answer evidence without matchin
  const records=['public','private'].map(scope=>{
   const base=metadata(blob(scope),scope);
   return {...base,source_signature:sourceSignature(base),source_available:true,source_changed:false,
-   summary:'Quantum topology control is documented here',key_terms:['quantum topology'],
+   review_status:'Approved',summary:'Quantum topology control is documented here',key_terms:['quantum topology'],
    themes:['quantum anomaly'],review_notes:'Unverified wording is not source evidence'};
  });
  const h=harness({records});
