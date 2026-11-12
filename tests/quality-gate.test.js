@@ -75,3 +75,17 @@ test('Document hash cannot be replaced with the passage digest',async()=>{
  r.source_coverage[0].original_file_sha256=r.passages[0].passage_sha256;
  assert.equal(evaluateRetrieval(r).status,'BLOCK');
 });
+
+test('Evidence acquisition independently finds passages after 120,000 characters of HTML',async()=>{
+ const id='private:test.html';
+ const raw='<h1>Preface</h1><p>'+('background information '.repeat(6500))+
+  '</p><h2>Final evidence</h2><p>Unique evidence endmarker confirms signed source coverage.</p>';
+ assert.ok(raw.indexOf('Unique evidence endmarker')>120000);
+ const r=await assembleEvidence({query:'endmarker',ids:[id],mode:'focused'},[make(id)],fixture(raw));
+ assert.equal(r.source_extraction_complete,true);
+ assert.equal(r.source_coverage[0].original_file_sha256,sha256(raw));
+ assert.equal(r.retrieval_quality.gates.passage_provenance,'PASS');
+ assert.ok(r.passages.some(p=>p.passage.includes('Unique evidence endmarker')));
+ assert.equal(r.passages[0].source_sha256,r.source_coverage[0].original_file_sha256);
+ assert.equal(r.evidence_sufficiency,'NOT_ASSESSED');
+});

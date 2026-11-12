@@ -3,6 +3,7 @@ const {list,get}=require('@vercel/blob');
 const {Readable}=require('node:stream');
 const {pdfText}=require('./_pdf');
 const {htmlStructure}=require('./_structure');
+const {boundedHtmlText}=require('./_document_text_limit');
 const {searchFile,termsOf,MAX_RESULTS,MAX_DOCUMENTS}=require('./_content_search');
 const {assembleEvidence,validateRequest,MODES}=require('./_evidence_package');
 const {discover}=require('./_master_discovery');
@@ -22,7 +23,7 @@ const SOLUTION_GROUPS={
  'solution-assurance-documentation-support':'Solution Assurance Concept',
  'solution-assurance-concept':'Solution Assurance Concept'
 };
-const MAX_BYTES=6*1024*1024,MAX_TEXT=60000;
+const MAX_BYTES=6*1024*1024;
 const storeId=()=>process.env.PRIVATE_BLOB_STORE_ID||'store_YAAwH6FewcrImhA1';
 function permitted(path){
  if(typeof path!=='string'||path.length>1024||!/\.(?:html?|pdf)$/i.test(path))return false;
@@ -60,7 +61,7 @@ async function getContent(doc,options={}){
   chunks.push(chunk);
  }
  const text=stripHtml(Buffer.concat(chunks).toString('utf8'));
- return {text:text.slice(0,MAX_TEXT),truncated:text.length>MAX_TEXT,extraction:'html-text'};
+ return boundedHtmlText(text);
 }
 
 async function inspectStructure(doc){

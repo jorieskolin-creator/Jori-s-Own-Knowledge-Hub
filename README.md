@@ -273,3 +273,15 @@ The endpoint advertises seven metadata, discovery and Evidence Package operation
 See [governed evidence mode](docs/governed-evidence-mode.md) for full setup and test instructions.
 
 **Privacy limitation:** Retrieval-integrity checks are **not** a recipient-specific sensitive-data egress/privacy clearance. Private passages may still contain information that should not be sent to particular external models. Apply applicable data-handling policies to stored material and connected model/consumer. The unified connector limits the material **available through this connection**; it cannot prevent a consuming application from using a separately connected unrestricted source.
+
+## Direct HTML reading limit: 120,000 characters
+
+The Public and Private standard MCP `get_document` operations now return up to **120,000 extracted HTML text characters** (previously 60,000). `truncated: true` continues to signal when the direct reading is incomplete. The original HTML source-file size limit remains 6 MB. Documents longer than 120,000 extracted characters still require another method or bounded, targeted retrieval; this change does **not** implement pagination for HTML direct reading.
+
+**This cap is not used by Evidence Package acquisition:** `retrieve_evidence` and `retrieve_topic_evidence` parse/index the source internally up to their file size, extraction/timeout and retrieval windows, then return selected passages subject to the bounded Evidence Package budgets (focused 10,000; comparative 18,000; comprehensive 28,000 passage characters). Complete source indexing does not guarantee semantic recall or that all matching passages will be returned. `WARN` signals bounded or partial coverage, and `PASS` does not establish factual truth or complete domain evidence.
+
+**Master Table enrichment has a separate processing route:** Public-only, administrator-authorized enrichment extracts source text internally with a 350,000-character model-input budget. It never uses the 120,000-character direct MCP text cap. Private Master Table entries remain manual; when their summaries are authored in ChatGPT using direct document reading, the 120,000-character cap is relevant.
+
+**PDF direct reading is separate:** it retains a 45,000-character output budget and a maximum of 10 explicitly selected pages per call. Full-document PDF evidence search processes text layers from all available pages under its own 8 MB and time limits, but scanned pages and images are not OCR-interpreted automatically. To summarize longer PDFs, retrieve relevant pages or source passages and explicitly record incomplete coverage.
+
+See `tests/document-text-limit.test.js` and the long-source regression test in `tests/quality-gate.test.js`.
