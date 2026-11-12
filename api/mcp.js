@@ -182,13 +182,13 @@ async function callTool(name,args,governedMode=false){
  if(name==='list_documents'){
   const docs=await entries(),limit=Math.min(100,Math.max(1,Number(args.limit)||100));
   const subset=docs.filter(d=>(!args.category||d.category===args.category||d.pathname.startsWith(args.category+'/'))&&(!args.subfolder||d.subfolder===args.subfolder));
-  return result({documents:subset.slice(0,limit),total:subset.length,truncated:subset.length>limit});
+  return result({documents:governedMode?subset.slice(0,limit).map(governed.catalogEntry):subset.slice(0,limit),total:subset.length,truncated:subset.length>limit});
  }
  if(name==='search_documents'){
   const q=String(args.query||'').trim().toLowerCase();if(!q||q.length>200)return fail('Search query must contain 1–200 characters');
   const docs=await entries();const found=docs.filter(d=>[d.title,d.category,d.pathname,d.display_group].join(' ').toLowerCase().includes(q));
   const limit=Math.min(50,Math.max(1,Number(args.limit)||20));
-  return result({documents:found.slice(0,limit),total:found.length,search_scope:'metadata',truncated:found.length>limit});
+  return result({documents:governedMode?found.slice(0,limit).map(governed.catalogEntry):found.slice(0,limit),total:found.length,search_scope:'metadata',truncated:found.length>limit});
  }
  if(name==='search_content')return searchContent(args);
  if(name==='retrieve_evidence')return retrieveEvidence(args,governedMode);
@@ -199,7 +199,7 @@ async function callTool(name,args,governedMode=false){
   const id=String(args.id||'');if(!id.startsWith('public:')||!permitted(id.slice(7)))return fail('Only categorized public document identifiers are allowed');
   const docs=await entries();const doc=docs.find(d=>d.id===id);
   if(!doc)return fail('Document not found in public catalog');
-  if(name==='get_document_metadata')return result(doc);
+  if(name==='get_document_metadata')return result(governedMode?governed.catalogEntry(doc):doc);
   if(name==='get_document_structure')return result({...doc,...await inspectStructure(doc)});
   const body=await getContent(doc,args);return result({...doc,...body});
  }
