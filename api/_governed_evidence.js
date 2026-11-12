@@ -11,6 +11,12 @@ function allowed(name){return typeof name==='string'&&ALLOWED.has(name);}
 function advertised(tools){return tools.filter(t=>allowed(t.name)).map(t=>({
  ...t,description:t.description+' Governed mode: discovery metadata is not answer evidence. Cite only retrieved evidence-package passages.'
 }));}
+// Governed discovery returns catalog identifiers, not directly fetchable Blob URLs.
+function catalogEntry(doc){
+ if(!doc||typeof doc!=='object')return null;
+ const {id,title,category,subfolder,display_group,access,pathname,mime_type,updated,size}=doc;
+ return {id,title,category,subfolder,display_group,access,pathname,mime_type,updated,size};
+}
 function sanitizedDiscovery(report){
  if(!report||typeof report!=='object')return report;
  return {...report,candidates:Array.isArray(report.candidates)?
@@ -53,4 +59,4 @@ function releaseTopic(report){
   verified_absence:false
  };
 }
-module.exports={POLICY,allowed,advertised,sanitizedDiscovery,releasePackage,releaseTopic};
+module.exports={POLICY,allowed,advertised,catalogEntry,sanitizedDiscovery,releasePackage,releaseTopic};
