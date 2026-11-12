@@ -251,3 +251,11 @@ This focused change is intentionally additive and keeps the two existing read-on
 **Regression evidence.** The new `tests/retrieval-golden-standard.test.js` provides seven synthetic retrieval cases: positive relevant source, no lexical match vs. absence, missing source, altered hashes, repeatability, truncated offset and contract fields. Additional tests cover source relationships, stale versions and fail-closed Public AI approval. GitHub Actions runs `npm test` on pull requests to `main`. A green test run confirms these automated tests, not production deployment, real-customer privacy review or exhaustive source-format correctness.
 
 **Manual acceptance before merging:** Review the Evidence Package payload contract with any external consumers; check Master Table source links and their stale-state UI; confirm explicit Public enrichment approval; verify Public and Private MCP retrieval remain compatible; review deployment access and egress rules. No broad evidence-acquisition rewrite, vector index, model-context service or visual interpretation engine is introduced here.
+
+## Governed Evidence Consumption Mode (2026-11-12)
+
+To test Knowledge Hub as an independent **source of governed evidence**, use the separate MCP endpoints `/api/mcp-governed` (Public) and `/api/mcp-governed-private` (Private, OAuth). These expose **only metadata discovery, Evidence Packages, and integrity/coverage operations**. Direct `get_document`, `search_content` and `get_document_structure` calls are rejected server-side. The Private endpoint requires its own narrowly scoped OAuth resource audience.
+
+The existing `/api/mcp` and `/api/mcp-private` endpoints retain unrestricted **authorized** document reading for normal use. For a valid evidence-only acceptance test, connect only the governed endpoint. The model must be instructed to use released Evidence Package passages exclusively, and to report unsupported claims rather than reading the document independently.
+
+Read [the governed evidence mode guide](docs/governed-evidence-mode.md) for tool contracts, delivery decisions, consumer isolation and repeatable acceptance tests. This route reuses the existing bounded deterministic retrieval kernel. It does not claim semantic completeness, privacy clearance or verification of absence.
