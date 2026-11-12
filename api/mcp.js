@@ -221,7 +221,7 @@ module.exports=async function(req,res,options={}){
  if(data.method==='notifications/initialized'){res.statusCode=202;return res.end()}
  if(data.jsonrpc!=='2.0'||!Object.prototype.hasOwnProperty.call(data,'id'))return send(res,400,{error:'Invalid JSON-RPC envelope'});
  try{
-  if(data.method==='initialize')return send(res,200,rpc(data.id,{result:{protocolVersion:VERSION,capabilities:{tools:{listChanged:false}},serverInfo:{name:'jori-knowledge-hub-public',version:'0.1.0'}}}));
+  if(data.method==='initialize')return send(res,200,rpc(data.id,{result:{protocolVersion:VERSION,capabilities:{tools:{listChanged:false}},serverInfo:{name:governedMode?'jori-knowledge-hub-governed-public':'jori-knowledge-hub-public',version:'0.1.0'}}}));
   if(data.method==='ping')return send(res,200,rpc(data.id,{result:{}}));
   if(data.method==='tools/list')return send(res,200,rpc(data.id,{result:{tools:governedMode?governed.advertised(TOOLS):TOOLS}}));
   if(data.method==='tools/call'){
