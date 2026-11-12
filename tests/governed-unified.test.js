@@ -11,7 +11,7 @@ const oauthApi=require('../api/oauth');
 const {sign:sessionSign}=require('../api/_auth');
 const oldGoverned=require('../api/mcp-governed-private');
 const {createService,metadata}=require('../api/_governed_unified');
-const {sourceSignature}=require('../api/_master_table');
+const {sourceSignature,entryFromDoc}=require('../api/_master_table');
 const publicStore=process.env.PUBLIC_BLOB_STORE_ID||process.env.BLOB_STORE_ID||'store_6mg9Vu2ypJJMAwV3';
 const privateStore=process.env.PRIVATE_BLOB_STORE_ID||'store_YAAwH6FewcrImhA1';
 const path='02-frameworks/governance.html';
@@ -37,7 +37,15 @@ function harness(config={}){
    assert.equal(storeId,access==='public'?publicStore:privateStore);
    return fixture(access);
   },
-  readMaster:async()=>({table:{records:config.records||[]}})
+  readMaster:async()=>{
+    const baseline=['public','private'].map(scope=>{
+     const d=metadata(blob(scope),scope);
+     return {...entryFromDoc(d),review_status:'Approved'};
+    });
+    const records=config.records||baseline;
+    return {table:{schema_version:1,records,published_records:records,
+     publication:{status:'Approved',approved_at:'2026-11-12T10:00:00Z'}}};
+   }
  });
 }
 function response(){
@@ -82,13 +90,13 @@ test('Explicit mixed-scope evidence is packaged together and passes integrity ch
  }
  assert.equal(result.retrieval_quality.status,'PASS');
 });
-test('Automatic discovery uses Public and Private metadata fallback and acquires mixed evidence',async()=>{
+test('Automatic discovery uses Approved Public and Private metadata and acquires mixed evidence',async()=>{
  const h=harness();
  const found=await h.execute('discover_sources',{query:'governance',limit:10});
  assert.equal(found.scope,'public+private');
  assert.equal(found.public_candidates,1);
  assert.equal(found.private_candidates,1);
- assert.equal(found.unindexed_count,2);
+ assert.equal(found.unindexed_count,0);
  assert.deepEqual(new Set(found.candidates.map(c=>c.id)),new Set([publicId,privateId]));
  const result=await h.topic({query:'governance',mode:'comparative'});
  assert.equal(result.selected_ids.length,2);
