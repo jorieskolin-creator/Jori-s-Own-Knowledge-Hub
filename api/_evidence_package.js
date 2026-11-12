@@ -48,7 +48,8 @@ function pick(ranked,config,budget){
   if(already.some(r=>Math.min(r.end,match.end)-Math.max(r.start,match.start)>Math.min(120,(match.end-match.start)*0.4)))continue;
   const text=match.passage.slice(0,budget);
   if(text.length<100&&match.passage.length>=100)break;
-  selected.push({...match,passage:text,passage_truncated:match.passage.length>text.length||!match.context_complete});
+  selected.push({...match,passage:text,end:match.start+text.length,
+    passage_truncated:match.passage.length>text.length||!match.context_complete});
   budget-=text.length;
   bySource.set(match.id,count+1);
   already.push({start:match.start,end:match.start+text.length});
