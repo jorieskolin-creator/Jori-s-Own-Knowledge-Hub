@@ -87,7 +87,11 @@ test('Stripe-format secret is rejected before any OpenAI provider request',async
  process.env.KNOWLEDGE_HUB_API_KEY='sk_live_not_an_openai_key';
  try{
   await assert.rejects(
-   ()=>callModel({title:'Public Sample'},{text:'Public sample text',extraction_complete:true}),
+   ()=>callModel({id:'public:02-frameworks/sample.html',access:'public',title:'Public Sample',
+     source_signature:'a'.repeat(64),source_available:true,source_changed:false},
+     {text:'Public sample text',extraction_complete:true},
+     {approved:true,purpose:'master_table_discovery_enrichment',recipient:'openai.responses',
+      source_id:'public:02-frameworks/sample.html',source_signature:'a'.repeat(64),approved_at:new Date().toISOString()}),
    /Stripe key/);
  }finally{
   if(previous===undefined)delete process.env.KNOWLEDGE_HUB_API_KEY;
