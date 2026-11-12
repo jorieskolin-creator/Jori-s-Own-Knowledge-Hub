@@ -189,7 +189,7 @@ An Admin-maintained Master Table is now part of the application. The separately 
 **Admin interface:** After Admin login, two new controls appear beside Refresh Documents.
 
 - **Update the Master Table:** Reconcile all categorized Public and Private Blob documents into a protected index without replacing existing human edits. New Private documents get only deterministic source fields. New Public documents get deterministic fields, then the UI asks for permission before sequential Public-only AI enrichment. The only AI trigger is an explicit Admin click.
-- **Master Table:** Search/filter entries; edit title, document type, summary, key terms, themes, sections and related documents. Save publishes immediately; no separate approval statuses. Delete removes the index entry, not the original document. Import reviewed JSON accepts either an array of records or an object with a records array, and fills only entries whose descriptive fields remain empty.
+- **Master Table:** Search/filter entries; edit title, document type, summary, key terms, themes, sections and related documents. Save Entry stages edits in the working index. Each document has an independent Approved / Draft / Obsolete lifecycle status; Save & approve Master Table publishes a complete discovery snapshot. Source files are never deleted by changing lifecycle status. Delete removes the index entry, not the original document. Import reviewed JSON accepts either an array of records or an object with a records array, and fills only entries whose descriptive fields remain empty.
 
 **Storage and access:** Source code is in api/_master_table.js and the Admin API in api/master-table.js. The index is stored as _knowledge-system/master-table-v1.json in the PRIVATE Blob store, outside the six document folder categories. The Admin API requires the signed Admin session and same-origin checks for writes. Conditional Blob writes use ifMatch/ETag to prevent stale editing sessions from overwriting newer data. Public and Private descriptions are separated by access scope.
 
@@ -216,7 +216,7 @@ Schemas:
 
 Review fields:
 - `review_notes` — admin-editable description of source scope, unsupported claims, diagrams and exceptions.
-- `review_status` — `Approved` on manual Save or reviewed JSON import; no separate approval workflow. New deterministic-only entries initially have null status.
+- `review_status` — administrator-selected `Approved`, `Draft`, or `Obsolete` on each document. New deterministic-only entries default to `Draft`. A separate table-level publication action controls when status and description edits become available to governed discovery.
 - `review_version` — optional human label, e.g. `v1.0`.
 - `last_reviewed` — ISO 8601 timestamp set automatically on manual Save; imported source review date can be preserved when provided as ISO 8601.
 - `text_extraction` — `NOT_ASSESSED`, `COMPLETE`, `PARTIAL` or `FAILED`; does not imply diagrams were examined.
@@ -226,11 +226,11 @@ Review fields:
 
 Source title, source timestamp, source scope, pathname, source signature and content hash are controlled by application source metadata, not trusted from imported JSON. Existing stored records lacking these new fields are read with backward-compatible defaults. The legacy `extraction_status` is maintained for older clients.
 
-Public GPT-6.1 Terra enrichment now records text extraction, unassessed visual inspection and deterministic processing caveats in Review Notes; generated metadata is not automatically labeled as human-reviewed. The Admin Save operation labels it Approved.
+Public GPT-6.1 Terra enrichment now records text extraction, unassessed visual inspection and deterministic processing caveats in Review Notes; generated metadata is not automatically labeled as human-reviewed. The Admin Save Entry operation does not change its lifecycle status unless explicitly selected; a separate whole-table approval is necessary to publish staged changes.
 
-Import safety: reviewed human-created JSON may replace **AI-only** fields, but previously manually saved entries (including deliberately empty entries) are preserved. This lets the completed reviewed HTML catalog supersede auto-generated Public descriptions without overwriting later manual revisions. No external source contents are included in the import, and Private material never enters the Public AI workflow.
+Import safety: human-reviewed JSON (including explicit per-document review statuses) may replace **AI-only** fields, but previously manually saved entries (including deliberately empty entries) are preserved. This lets the completed reviewed HTML catalog supersede auto-generated Public descriptions without overwriting later manual revisions. No external source contents are included in the import, and Private material never enters the Public AI workflow.
 
-MCP discovery now returns review notes (bounded) and separate text/visual extraction status with relevant candidates. These are catalog qualifications, **not independent evidence or proof of full document comprehension**. Actual findings remain grounded in the original source retrieval and quality gates.
+MCP discovery uses only the last approved Master Table snapshot and returns review notes (bounded) and separate text/visual extraction status for approved descriptions. Obsolete sources are excluded from default discovery, while Draft descriptions fall back to source title/path metadata rather than being treated as approved. These are catalog qualifications, **not independent evidence or proof of full document comprehension**. Actual findings remain grounded in the original source retrieval and quality gates.
 
 The initial 5-entry HTML remains a review artifact only. The full table will be imported only after the user supplies the complete reviewed HTML and its conversion to the import schema.
 
@@ -285,3 +285,17 @@ The Public and Private standard MCP `get_document` operations now return up to *
 **PDF direct reading is separate:** it retains a 45,000-character output budget and a maximum of 10 explicitly selected pages per call. Full-document PDF evidence search processes text layers from all available pages under its own 8 MB and time limits, but scanned pages and images are not OCR-interpreted automatically. To summarize longer PDFs, retrieve relevant pages or source passages and explicitly record incomplete coverage.
 
 See `tests/document-text-limit.test.js` and the long-source regression test in `tests/quality-gate.test.js`.
+
+## Master Table document lifecycle and whole-table approval (2026-11-12)
+
+**Document status** and **Master Table publication** are independent.
+
+- **Approved (document):** the current document's descriptive entry has been reviewed and may be used for candidate discovery once the Master Table snapshot is published.
+- **Draft (document):** a work-in-progress or unreviewed description. Its unapproved summary, key terms, themes and review notes are **not** used by default MCP discovery. An authorized catalog can still find the source by file title/path metadata.
+- **Obsolete (document):** historical/retired material, still retained in its original Public or Private Blob location and in the Master Table for source-ID-based comparison. It is excluded from default topic discovery once that status is published. Authorized explicit-ID evidence retrieval remains possible; no original document is deleted.
+- **Save entry (stage changes):** persists a working record and sets the whole Master Table to **Draft**. It preserves the last approved discovery snapshot.
+- **Save & approve Master Table:** requires an authenticated administrator action and a current ETag, and atomically snapshots all working records as the published discovery index. The document statuses remain exactly as selected; approving the table does **not** mark every document Approved.
+
+**Storage compatibility:** The existing schema remains v1, with additive `publication` and `published_records` fields. Legacy Master Tables are treated as a last-published snapshot on first read so existing discovery is not inadvertently wiped out when the workflow changes. The index remains in the protected Blob store; access classification of the original sources is unchanged. A newly saved entry, an import, an AI enrichment, a delete or a source inventory reconciliation does not silently approve/publish the working table.
+
+**Important boundary:** This governs **discovery metadata**, not direct access to authorized sources. A source marked Obsolete can still be retrieved by exact ID, and status alone does not establish that its content is true or safe to transmit to a model. Evidence Packages continue to require provenance and retrieval quality gates.
