@@ -1,6 +1,6 @@
 'use strict';
 // Master Table discovery is a hint layer, never a substitute for source evidence.
-const {readMaster,sourceSignature}=require('./_master_table');
+const {readMaster,sourceSignature,discoveryRecords}=require('./_master_table');
 const {termsOf}=require('./_content_search');
 function relevance(query,entry){
  const q=query.toLocaleLowerCase('en').trim(),terms=termsOf(query);
@@ -22,26 +22,29 @@ async function discover(query,scope,docs,limit=12,indexOverride=null){
  termsOf(query);
  if(!['public','private'].includes(scope))throw Error('Invalid discovery scope');
  if(!Number.isInteger(limit)||limit<1||limit>30)throw Error('limit must be 1–30');
- const table=indexOverride===null?(await readMaster()).table:{records:indexOverride};
- const index=table.records.filter(r=>r.access===scope);
+ const table=indexOverride===null?(await readMaster()).table:null;
+ const index=(indexOverride===null?discoveryRecords(table):indexOverride).filter(r=>r.access===scope);
  const byId=new Map(index.map(r=>[r.id,r]));
- const found=[],stale=[],noEntry=[];
+ const found=[],stale=[],noEntry=[],obsolete=[],draft=[];
  for(const d of docs){
   const r=byId.get(d.id);
+  if(r?.review_status==='Obsolete'){obsolete.push(d.id);continue;}
+  if(r?.review_status==='Draft'||r?.review_status===null){draft.push(d.id);}
   if(!r){noEntry.push(d.id);}
   if(r?.source_changed||r?.source_available===false||(r?.source_signature&&d.size!==undefined&&sourceSignature(d)!==r.source_signature)){
    stale.push(d.id);continue;
   }
-  const entry=r||{id:d.id,title:d.title||'',pathname:d.pathname,summary:'',key_terms:[],themes:[]};
+  const approved=r?.review_status==='Approved';
+  const entry=approved?r:{id:d.id,title:d.title||'',pathname:d.pathname,summary:'',key_terms:[],themes:[]};
   const v=relevance(query,entry);
   if(v)found.push({id:d.id,title:entry.title||d.title,pathname:d.pathname,
-   source_kind:r?'master_table':'metadata_fallback',summary_available:!!r?.summary,
-   key_terms_available:!!r?.key_terms?.length,
-   document_type:r?.document_type||null,
+   source_kind:approved?'master_table':'metadata_fallback',summary_available:approved&&!!r.summary,
+   key_terms_available:approved&&!!r.key_terms?.length,
+   document_type:approved?r.document_type||null:null,
    review_status:r?.review_status||null,
-   text_extraction:r?.text_extraction||null,
-   visual_inspection:r?.visual_inspection||null,
-   review_notes:r?.review_notes?.slice(0,900)||null,
+   text_extraction:approved?r.text_extraction||null:null,
+   visual_inspection:approved?r.visual_inspection||null:null,
+   review_notes:approved?r.review_notes?.slice(0,900)||null:null,
    score:v.score,matching_terms:v.matching_terms});
  }
  found.sort((a,b)=>b.score-a.score||a.pathname.localeCompare(b.pathname));
@@ -49,6 +52,7 @@ async function discover(query,scope,docs,limit=12,indexOverride=null){
   inventory_documents:docs.length,master_entries:index.length,
   master_entries_available:index.filter(r=>r.source_available!==false).length,
   unindexed_count:noEntry.length,unindexed_ids:noEntry.slice(0,30),
+  draft_count:draft.length,obsolete_count:obsolete.length,
   stale_count:stale.length,stale_ids:stale.slice(0,30),
   candidates_found:found.length,candidates_returned:Math.min(limit,found.length),
   candidates_truncated:found.length>limit,
@@ -58,6 +62,8 @@ async function discover(query,scope,docs,limit=12,indexOverride=null){
    'Master Table summaries and themes are discovery hints, not primary evidence.',
    'Lexical matching cannot establish that all semantically relevant documents were discovered.',
    ...(noEntry.length?['Unindexed documents were searched using metadata only.']:[]),
+   ...(draft.length?['Draft document descriptions were not used; title/path metadata only.']:[]),
+   ...(obsolete.length?['Obsolete documents were excluded from default source discovery; exact-ID historical retrieval remains available.']:[]),
    ...(stale.length?['Stale or unavailable source entries were not used.']:[]),
    ...(found.length>limit?['Additional candidate documents were not returned due to limit.']:[])
   ]};

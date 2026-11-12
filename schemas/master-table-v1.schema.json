@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Knowledge Hub Master Table — Operational Format 1.0",
-  "description": "Administrative discovery metadata, not primary evidence. Public/Private access is enforced separately in application code. Save marks a record Approved.",
+  "description": "Working Master Table with independently staged per-document statuses and an approved, immutable-in-between-publishes discovery snapshot. All document source bodies remain in their original storage collections.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -22,6 +22,38 @@
     "records": {
       "type": "array",
       "maxItems": 5000,
+      "items": {
+        "$ref": "#/$defs/record"
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "approved_at"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "Approved",
+            "Draft"
+          ]
+        },
+        "approved_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      }
+    },
+    "published_records": {
+      "type": "array",
+      "maxItems": 5000,
+      "description": "Last explicitly approved catalog snapshot consumed by MCP discovery until next whole-table approval.",
       "items": {
         "$ref": "#/$defs/record"
       }
@@ -168,6 +200,8 @@
           ],
           "enum": [
             "Approved",
+            "Draft",
+            "Obsolete",
             null
           ]
         },

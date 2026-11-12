@@ -41,7 +41,7 @@ test('Master Table reconciliation detects new, changed and missing documents wit
 });
 test('Discovery matches full summaries and key terms, not only filenames',async()=>{
  const d=doc('private','Unrelated Filename');
- const entry={...entryFromDoc(d),summary:'Independent technical verification for AI risk decisions and human oversight.',
+ const entry={...entryFromDoc(d),review_status:'Approved',summary:'Independent technical verification for AI risk decisions and human oversight.',
   key_terms:['control effectiveness','AI governance'],themes:['solution assurance']};
  const result=await discover('control effectiveness','private',[d],12,[entry]);
  assert.equal(result.candidates_found,1);
@@ -119,7 +119,7 @@ test('New records separate actual content hashes from metadata-only signatures',
  assert.equal(doc.source_metadata_title,'Example');
  assert.equal(doc.text_extraction,'NOT_ASSESSED');
  assert.equal(doc.visual_inspection,'NOT_ASSESSED');
- assert.equal(doc.review_status,null);
+ assert.equal(doc.review_status,'Draft');
  assert.equal(doc.last_reviewed,null);
 });
 test('Saving approved manual descriptions preserves all reviewed HTML v1.0 information',()=>{
@@ -130,7 +130,7 @@ test('Saving approved manual descriptions preserves all reviewed HTML v1.0 infor
   summary:'The document reports a finding; the finding was not independently replicated.',
   key_terms:['governance','risk'],themes:['assurance'],
   review_notes:'PDF text was read; figures were not independently inspected.',
-  review_version:'v1.0',text_extraction:'Complete',visual_inspection:'Not assessed'
+  review_version:'v1.0',review_status:'Approved',text_extraction:'Complete',visual_inspection:'Not assessed'
  });
  assert.equal(updated.review_status,'Approved');
  assert.ok(Date.parse(updated.last_reviewed)>0);
@@ -149,14 +149,14 @@ test('AI enrichment does not falsely record a manual review approval',()=>{
    text_extraction:'PARTIAL',visual_inspection:'NOT_ASSESSED',
    review_notes:'Extractable text only; visual inspection not assessed.'},{markApproved:false});
  assert.equal(e.enrichment,'AI');
- assert.equal(e.review_status,null);
+ assert.equal(e.review_status,'Draft');
  assert.equal(e.last_reviewed,null);
  assert.equal(e.text_extraction,'PARTIAL');
  assert.match(e.review_notes,/visual inspection/);
 });
 test('Initial JSON import can preserve its existing approved review date',()=>{
  const d=entryFromDoc(doc('private','Risk Review'));
- const e=normalizeEdit(d,{review_version:'v1.0',review_notes:'Complete text; visuals not assessed.'},
+ const e=normalizeEdit(d,{review_version:'v1.0',review_status:'Approved',review_notes:'Complete text; visuals not assessed.'},
   {reviewedAt:'2026-11-11T14:41:00.000Z'});
  assert.equal(e.review_status,'Approved');
  assert.equal(e.last_reviewed,'2026-11-11T14:41:00.000Z');
@@ -192,7 +192,10 @@ test('Reviewed JSON import preserves manual entries and supersedes AI-only field
    readMaster:async()=>({table:structuredClone(table),etag:version}),
    writeMaster:async(next,etag)=>{assert.equal(etag,version);table=next;version='v'+(++writes+1);},
    sourceInventory:async()=>({documents:[],failures:[]}),reconcile:()=>{throw Error('Not used')},
-   normalizeEdit,descriptionHealth,MASTER_TABLE_FORMAT:'1.0'
+   normalizeEdit,stageTable:require('../api/_master_table').stageTable,
+   approveTable:require('../api/_master_table').approveTable,
+   withPublication:require('../api/_master_table').withPublication,
+   descriptionHealth,MASTER_TABLE_FORMAT:'1.0'
   },
   './_master_enrich':{extractPublic:()=>{throw Error('Do not enrich on import')},
    callModel:()=>{throw Error('Do not enrich on import')}}
@@ -215,9 +218,9 @@ test('Reviewed JSON import preserves manual entries and supersedes AI-only field
  assert.equal(table.records[0].summary,'Approved human summary');
  assert.equal(table.records[0].last_reviewed,importedDate);
  assert.equal(table.records[0].review_notes,'Observed text only');
- assert.equal(table.records[0].review_status,'Approved');
+ assert.equal(table.records[0].review_status,'Draft');
  assert.equal(table.records[1].summary,'');
- assert.equal(table.records[2].review_status,'Approved');
+ assert.equal(table.records[2].review_status,'Draft');
 });
 
 test('Verified links bind source ID and metadata version, not ambiguous titles',()=>{

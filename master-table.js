@@ -10,7 +10,7 @@
  '.mt-list td,.mt-list th{padding:9px;border-bottom:1px solid #e1e8ef;text-align:left;vertical-align:top}.mt-list tr{cursor:pointer}'+
  '.mt-list tr:hover,.mt-selected{background:#e7f5ed}.mt-editor label{font-size:12px;font-weight:bold;display:block;margin-top:10px}.mt-editor textarea,.mt-editor input,.mt-editor select{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font:13px system-ui}'+
  '.mt-editor textarea{min-height:90px;resize:vertical}.mt-actions{display:flex;justify-content:flex-end;gap:10px;padding:13px 0}.mt-msg{padding:8px 20px;font-size:12px;color:#475569;min-height:32px}'+
- '.mt-error{color:#b42318}.mt-small{color:#64748b;font-size:11px}.mt-preview{color:#617085;line-height:1.4}.mt-editor input[readonly]{background:#eef2f6}'+
+ '.mt-error{color:#b42318}.mt-small{color:#64748b;font-size:11px}.mt-preview{color:#617085;line-height:1.4}.mt-editor input[readonly]{background:#eef2f6}.mt-obsolete{opacity:.7}.mt-publication{font-weight:600;color:#275e53}'+
  '@media(max-width:820px){.mt-main{display:block;height:65vh;overflow:auto}.mt-list,.mt-editor{max-height:45vh;border-right:0;border-bottom:1px solid #e1e8ef}}';
  document.head.appendChild(style);
  function node(tag,content,cls){const n=document.createElement(tag);if(content!==undefined)n.textContent=String(content);if(cls)n.className=cls;return n}
@@ -20,15 +20,15 @@
  const dialog=document.createElement('dialog');dialog.id='mtDialog';
  dialog.innerHTML='<div class="mt-header"><h2>Master Table</h2><span id="mtCount" class="small"></span><button type="button" class="secondary" id="mtClose">Close</button></div>'+
  '<div class="mt-tools"><input id="mtSearch" type="search" placeholder="Search summary, title, keywords and themes">'+
- '<select id="mtScope"><option value="all">All documents</option><option value="public">Public</option><option value="private">Private</option></select>'+
- '<button id="mtReload" type="button" class="secondary">Reload</button>'+
+ '<select id="mtScope"><option value="all">All documents</option><option value="public">Public</option><option value="private">Private</option></select>'+'<select id="mtStatus"><option value="all">All statuses</option><option value="Approved">Approved</option><option value="Draft">Draft</option><option value="Obsolete">Obsolete</option></select>'+
+ '<button id="mtReload" type="button" class="secondary">Reload</button>'+'<button id="mtApprove" type="button" class="primary">Save &amp; approve Master Table</button>'+
  '<button id="mtImport" type="button" class="secondary">Import reviewed JSON</button>'+
  '<input class="hidden" type="file" id="mtJsonFile" accept=".json,application/json"></div>'+
- '<div id="mtMessage" class="mt-msg" role="status"></div>'+
+ '<div id="mtPublication" class="mt-msg mt-publication" role="status"></div>'+'<div id="mtMessage" class="mt-msg" role="status"></div>'+
  '<div class="mt-main"><section class="mt-list"><table><thead><tr><th>Document</th><th>Access</th><th>Discovery description</th></tr></thead><tbody id="mtRows"></tbody></table></section>'+
  '<section id="mtEditor" class="mt-editor"><p>Select a document to edit its Master Table metadata.</p></section></div>';
  document.body.appendChild(dialog);
- const state={records:[],etag:null,selected:null,busy:false};
+ const state={records:[],etag:null,selected:null,busy:false,publication:null,publishedCount:0,entryDirty:false};
  function message(s,error=false){byId('mtMessage').textContent=s;byId('mtMessage').classList.toggle('mt-error',error)}
  async function request(action,properties={}){
   const read=action==='load';
@@ -80,11 +80,19 @@
    ['NOT_ASSESSED','Not assessed'],['COMPLETE','Complete'],['PARTIAL','Partial']
   ]);
   const version=field(host,'Review version (optional)',item.review_version||'',false);
-  field(host,'Review status (Save = Approved)',item.review_status||'Not saved yet',false,true);
-  field(host,'Last reviewed (recorded on Save)',item.last_reviewed||'Not yet reviewed',false,true);
+  const reviewStatus=choice(host,'Document lifecycle status',item.review_status||'Draft',[
+   ['Approved','Approved — current source'],['Draft','Draft — under review'],
+   ['Obsolete','Obsolete — retained for historical comparison']
+  ]);
+  field(host,'Last reviewed (recorded when entry is saved)',item.last_reviewed||'Not yet reviewed',false,true);
+  host.append(node('p','Save entry stages changes without publishing. Save & approve Master Table publishes the working table. Obsolete source files remain stored and retrievable by ID.','mt-small'));
+  state.entryDirty=false;
+  byId('mtApprove').disabled=false;
+  host.addEventListener('input',()=>{state.entryDirty=true;byId('mtApprove').disabled=true},{once:true});
+  host.addEventListener('change',()=>{state.entryDirty=true;byId('mtApprove').disabled=true},{once:true});
   host.append(node('p','Source last updated: '+(item.source_updated||'unknown')+
    ' · Last saved: '+(item.last_saved||'not yet'),'mt-small'));
-  const actions=node('div',undefined,'mt-actions'),save=node('button','Save changes','primary'),remove=node('button','Delete entry','secondary');
+  const actions=node('div',undefined,'mt-actions'),save=node('button','Save entry (stage changes)','primary'),remove=node('button','Delete entry','secondary');
   actions.append(remove,save);host.append(actions);
   save.onclick=async()=>{
    save.disabled=true;
@@ -93,9 +101,9 @@
      themes:values(themes.value),important_sections:values(sections.value),related_documents:values(relations.value),
       related_source_ids:linkedSources.value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean),
      review_notes:notes.value,text_extraction:textCoverage.value,visual_inspection:visualCoverage.value,
-     review_version:version.value};
+     review_version:version.value,review_status:reviewStatus.value};
     const out=await request('save',{id:item.id,expected_etag:state.etag,changes});
-    await load(item.id);message('Saved and published. Summary: '+out.quality.summary_words+' words.');
+    await load(item.id);message('Entry saved to working draft, document status: '+out.record.review_status+'. Approve the Master Table to publish. Summary: '+out.quality.summary_words+' words.');
    }catch(e){message(e.message,true)}finally{save.disabled=false}
   };
   remove.onclick=async()=>{
@@ -107,13 +115,16 @@
  }
  function render(){
   const host=byId('mtRows');host.replaceChildren();
-  const q=byId('mtSearch').value.trim().toLowerCase(),scope=byId('mtScope').value;
+  const q=byId('mtSearch').value.trim().toLowerCase(),scope=byId('mtScope').value,
+   status=byId('mtStatus').value;
   const filtered=state.records.filter(r=>(scope==='all'||r.access===scope)&&
+   (status==='all'||(r.review_status||'Draft')===status)&&
    [r.title,r.source_metadata_title,r.pathname,r.document_type,r.summary,r.review_notes,
     ...(r.important_sections||[]),...(r.key_terms||[]),...(r.themes||[])].join(' ').toLowerCase().includes(q));
   byId('mtCount').textContent=filtered.length+' / '+state.records.length+' entries';
   for(const r of filtered){
    const tr=document.createElement('tr');if(r.id===state.selected)tr.className='mt-selected';
+   if(r.review_status==='Obsolete')tr.classList.add('mt-obsolete');
    const name=node('td');name.append(node('strong',r.title),node('div',r.pathname,'mt-small'));
    const access=node('td',r.access);if(!r.source_available)access.append(node('div','Unavailable','mt-error'));
    if(r.source_changed)access.append(node('div','Changed','mt-error'));
@@ -127,6 +138,9 @@
  }
  async function load(selected=state.selected){
   const d=await request('load');state.records=d.records||[];state.etag=d.etag??null;
+  state.publication=d.publication||{status:'Draft',approved_at:null};state.publishedCount=d.published_count||0;
+  byId('mtPublication').textContent='Master Table: '+state.publication.status+' · Last approved: '+
+   (state.publication.approved_at||'Not yet')+' · Published entries: '+state.publishedCount;
   state.selected=state.records.some(r=>r.id===selected)?selected:null;render();edit();
  }
  async function update(){
@@ -158,8 +172,16 @@
   finally{state.busy=false;updateButton.disabled=false;openButton.disabled=false}
  }
  updateButton.onclick=update;
- openButton.onclick=async()=>{dialog.showModal();try{await load();message('Edit an entry and Save to publish. No separate approval is required.')}catch(e){message(e.message,true)}};
- byId('mtClose').onclick=()=>dialog.close();byId('mtSearch').oninput=render;byId('mtScope').onchange=render;
+ openButton.onclick=async()=>{dialog.showModal();try{await load();message('Save entries individually, then Save & approve Master Table to publish the full index.')}catch(e){message(e.message,true)}};
+ byId('mtApprove').onclick=async()=>{
+  if(state.entryDirty){message('Save the selected entry before approving the Master Table.',true);return}
+  if(!confirm('Approve and publish the complete saved Master Table? Draft and Obsolete document statuses remain unchanged.'))return;
+  const button=byId('mtApprove');button.disabled=true;
+  try{const out=await request('approve',{expected_etag:state.etag});await load();
+   message('Master Table approved and published: '+out.published_count+' entries.');}
+  catch(e){message(e.message,true)}finally{button.disabled=false}
+ };
+ byId('mtClose').onclick=()=>dialog.close();byId('mtSearch').oninput=render;byId('mtScope').onchange=render;byId('mtStatus').onchange=render;
  byId('mtReload').onclick=async()=>{try{await load();message('Master Table reloaded.')}catch(e){message(e.message,true)}};
  byId('mtImport').onclick=()=>byId('mtJsonFile').click();
  byId('mtJsonFile').onchange=async()=>{
@@ -168,7 +190,7 @@
    if(!Array.isArray(records))throw Error('Expected JSON array or an object with records');
    if(!confirm('Import '+records.length+' reviewed records? Manually saved entries will be preserved; reviewed records may replace AI-only descriptions.'))return;
    const out=await request('import',{records,expected_etag:state.etag});
-   await load();message('Imported '+out.imported+' entries; skipped '+out.skipped+'.');
+   await load();message('Imported '+out.imported+' entries into working draft; skipped '+out.skipped+'. Approve Master Table to publish.');
   }catch(e){message('Import failed: '+e.message,true)}finally{input.value=''}
  };
  byId('logout')?.addEventListener('click',()=>{if(dialog.open)dialog.close();state.records=[];state.etag=null});

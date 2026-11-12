@@ -10,8 +10,37 @@ const MAX_MASTER_BYTES=3*1024*1024;
 const MASTER_TABLE_FORMAT='1.0';
 const TEXT_EXTRACTION=['NOT_ASSESSED','COMPLETE','PARTIAL','FAILED'];
 const VISUAL_INSPECTION=['NOT_ASSESSED','COMPLETE','PARTIAL'];
+const DOCUMENT_STATUSES=['Approved','Draft','Obsolete'];
 const CATS=new Set(['01-solutions','02-frameworks','03-general-presentations','04-shared-knowledge','05-random','06-personal']);
-function masterEmpty(){return {schema_version:1,updated_at:null,records:[]};}
+function masterEmpty(){return {schema_version:1,updated_at:null,records:[],
+ published_records:[],publication:{status:'Draft',approved_at:null}};}
+function reviewStatus(value){
+ const status=value===null||value===undefined?'Draft':value;
+ if(!DOCUMENT_STATUSES.includes(status))throw Error('Invalid document review status');
+ return status;
+}
+// Freeze the previous discovery state when migrating a legacy table.
+function withPublication(table){
+ const working=(table.records||[]).map(withReviewFields);
+ const published=Array.isArray(table.published_records)?
+  table.published_records.map(withReviewFields):working.map(r=>({...r}));
+ const publication=table.publication||{
+  status:working.length?'Approved':'Draft',approved_at:table.updated_at||null
+ };
+ if(!['Approved','Draft'].includes(publication.status))throw Error('Invalid Master Table publication status');
+ return {...table,records:working,published_records:published,publication};
+}
+function stageTable(table){
+ const t=withPublication(table);
+ return {...t,publication:{...t.publication,status:'Draft'}};
+}
+function approveTable(table,at=new Date().toISOString()){
+ const t=withPublication(table),date=new Date(at);
+ if(!Number.isFinite(date.getTime()))throw Error('Invalid approval timestamp');
+ return {...t,published_records:t.records.map(r=>structuredClone(r)),
+  publication:{status:'Approved',approved_at:date.toISOString()}};
+}
+function discoveryRecords(table){return withPublication(table).published_records;}
 function permitted(path){return typeof path==='string'&&path.length<=1024&&
  /\.(?:html?|pdf)$/i.test(path)&&path.split('/').length>1&&
  path.split('/').every(s=>s&&s!=='.'&&s!=='..'&&!s.startsWith('.'))&&CATS.has(path.split('/')[0]);}
@@ -40,7 +69,7 @@ function withReviewFields(entry){
  e.source_hash=e.source_hash??null; // Reserved for a verified SHA-256 of the original file bytes.
  e.related_source_refs=Array.isArray(e.related_source_refs)?e.related_source_refs:[]; // Version-pinned IDs, not title guesses.
  e.review_notes=e.review_notes??'';
- e.review_status=e.review_status??null; // Not an approval workflow; Save sets Approved.
+ e.review_status=reviewStatus(e.review_status);
  e.review_version=e.review_version??'';
  e.last_reviewed=e.last_reviewed??null;
  const old=e.extraction_status==='NOT_INSPECTED'||e.extraction_status==='MANUAL'?'NOT_ASSESSED':e.extraction_status;
@@ -58,7 +87,7 @@ function entryFromDoc(d){
   source_available:true,source_changed:false,source_hash:null,
   source_metadata_title:text(d.title||sourceTitle(path),220),
   summary:'',key_terms:[],themes:[],document_type:'',important_sections:[],related_documents:[],related_source_refs:[],
-  review_notes:'',review_status:null,review_version:'',last_reviewed:null,
+  review_notes:'',review_status:'Draft',review_version:'',last_reviewed:null,
   text_extraction:'NOT_ASSESSED',visual_inspection:'NOT_ASSESSED',
   extraction_status:'NOT_INSPECTED',enrichment:'NONE',last_saved:null};
 }
@@ -117,8 +146,8 @@ function normalizeEdit(entry,changes,options={}){
   out.extraction_status=out.text_extraction==='NOT_ASSESSED'?'NOT_INSPECTED':out.text_extraction;
  }
  if('visual_inspection'in changes)out.visual_inspection=coverageState(changes.visual_inspection,VISUAL_INSPECTION);
+ if('review_status'in changes)out.review_status=reviewStatus(changes.review_status);
  if(options.markApproved!==false){
-  out.review_status='Approved';
   if(options.reviewedAt!==undefined&&options.reviewedAt!==null){
    const time=Date.parse(options.reviewedAt);
    if(!Number.isFinite(time))throw Error('Invalid last reviewed date');
@@ -154,10 +183,10 @@ async function readMaster(){
  if(!file||!file.stream)throw Error('Master Table could not be read');
  const table=JSON.parse(await readBytes(file,MAX_MASTER_BYTES));
  if(table.schema_version!==1||!Array.isArray(table.records))throw Error('Unsupported Master Table schema');
- return {table:{...table,records:table.records.map(withReviewFields)},etag:info.etag};
+ return {table:withPublication(table),etag:info.etag};
 }
 async function writeMaster(table,etag){
- const body=JSON.stringify({...table,schema_version:1,updated_at:new Date().toISOString()});
+ const body=JSON.stringify({...withPublication(table),schema_version:1,updated_at:new Date().toISOString()});
  if(Buffer.byteLength(body)>MAX_MASTER_BYTES)throw Error('Master Table storage limit exceeded');
  const opts={access:'private',storeId:STORE_ID(),contentType:'application/json'};
  if(etag){opts.allowOverwrite=true;opts.ifMatch=etag;}
@@ -204,6 +233,7 @@ function reconcile(table,documents,successfulScopes){
  const records=[...existing.values()].sort((a,b)=>a.access.localeCompare(b.access)||a.title.localeCompare(b.title));
  return {table:{...table,records},added,changed,missing};
 }
-module.exports={MASTER_PATH,STORE_ID,MASTER_TABLE_FORMAT,TEXT_EXTRACTION,VISUAL_INSPECTION,
- masterEmpty,permitted,words,strings,sourceSignature,sourceTitle,withReviewFields,coverageState,
+module.exports={MASTER_PATH,STORE_ID,MASTER_TABLE_FORMAT,TEXT_EXTRACTION,VISUAL_INSPECTION,DOCUMENT_STATUSES,
+ masterEmpty,withPublication,stageTable,approveTable,discoveryRecords,reviewStatus,
+ permitted,words,strings,sourceSignature,sourceTitle,withReviewFields,coverageState,
  entryFromDoc,normalizeEdit,bindRelatedSourceIds,inspectSourceLinks,descriptionHealth,readMaster,writeMaster,sourceInventory,reconcile};

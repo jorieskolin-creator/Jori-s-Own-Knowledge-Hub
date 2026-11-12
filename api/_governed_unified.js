@@ -82,7 +82,7 @@ function createService(deps={}){
   termsOf(query);
   if(!Number.isInteger(limit)||limit<1||limit>30)throw Error('Invalid candidate limit');
   const raw=await masterCall();
-  const records=raw?.table?.records||raw?.records;
+  const records=raw?.table?.published_records||raw?.published_records||raw?.table?.records||raw?.records;
   if(!Array.isArray(records))throw Error('Master Table inventory unavailable');
   const [pub,priv]=await Promise.all(SCOPES.map(scope=>
    discoverCall(query,scope,docs.filter(d=>d.access===scope),30,records)));
