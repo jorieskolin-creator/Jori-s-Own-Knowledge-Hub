@@ -73,3 +73,25 @@ Each released Evidence Package preserves its existing `schema_version: 1`, `sour
 - No background model-evaluation process is introduced here. The consumer remains responsible for grounded reasoning and source-correct citation.
 - The existing standard MCP endpoints deliberately retain direct reading. Use an isolated governed connection when the outcome must be attributable exclusively to Evidence Packages.
 - Before publishing these changes, run tests, inspect the Private OAuth consent and audience, and perform a live positive and negative retrieval in the preview environment.
+
+## Unified governed evidence endpoint — Public + Private
+
+**Preferred integration for one complete authorized Knowledge Hub connection:**
+
+`https://jori-knowledge-hub.vercel.app/api/mcp-governed-unified`
+
+Connection display name: **Jori's Knowledge Hub — Governed Evidence (Unified)**. Authentication: **OAuth**, using the existing Knowledge Hub administrator sign-in. The protected resource is `https://jori-knowledge-hub.vercel.app/api/mcp-governed-unified` and discovery is `/.well-known/oauth-protected-resource/api/mcp-governed-unified`.
+
+This is a third governed MCP endpoint, added without replacing the existing Public-only and Private-only governed endpoints. Existing general-purpose document-reading endpoints also remain operational.
+
+- The unified service requires successful inventory access to **both** Blob stores. It never treats a failed Private inventory as a Public-only success.
+- All discovered and retrieved source objects retain their `public:` or `private:` source IDs and `access` classification.
+- `retrieve_evidence` accepts up to four explicit source IDs in **any authorized mixture of Public and Private** and combines them into one versioned Evidence Package. Every passage maintains the correct original-byte SHA-256, passage SHA-256, section/page and source identifier.
+- `discover_sources` ranks current candidates from both collections using the existing Master Table and metadata fallback. It deliberately reports `discovery_complete: false` because lexical ranking cannot certify recall. `retrieve_topic_evidence` acquires from at most four best-ranked authorized candidates, reports other candidates unexamined and preserves warnings.
+- Direct document-reading and raw URLs are unavailable. The endpoint exposes the seven governed tools only.
+- A dedicated OAuth access-token audience ensures that its token **cannot access** the legacy unrestricted Private MCP or Private-only governed MCP. Those endpoints' tokens do not authorize unified access.
+- Successful integrity checks are not assertions of factual truth, policy compliance, privacy clearance, complete semantic recall or verified absence.
+
+**Initial acceptance, even with the Master Table incomplete:** connect only the new Unified endpoint, search for a known Public and a known Private document, then run `retrieve_evidence` using both exact IDs and a shared query. Confirm two distinct sources, source-specific SHA-256 hashes, passage locators and the governing retrieval quality. Repeat with a nonsense query: expect `NO_SUPPORTING_EVIDENCE`, no passages, and `verified_absence: false`. Confirm calls to `get_document` and `search_content` are rejected.
+
+**Deployment note:** these endpoints and OAuth routes become available only after the feature branch is merged and deployed. GitHub automated tests and a successful build do not replace a live OAuth and Public/Private Blob acceptance test.
