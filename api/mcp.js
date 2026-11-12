@@ -6,6 +6,7 @@ const {htmlStructure}=require('./_structure');
 const {searchFile,termsOf,MAX_RESULTS,MAX_DOCUMENTS}=require('./_content_search');
 const {assembleEvidence,validateRequest,MODES}=require('./_evidence_package');
 const {discover}=require('./_master_discovery');
+const governed=require('./_governed_evidence');
 const VERSION='2025-03-26';
 const CATS={
  '01-solutions':'Solutions',
@@ -107,7 +108,7 @@ async function searchContent(args){
   limitations:['Lexical matching does not establish semantic completeness or verified absence.',
   'Only explicitly selected documents were examined; diagrams and scanned pages may contain unseen information.']});
 }
-async function retrieveEvidence(args){
+async function retrieveEvidence(args,governedMode=false){
  let request;
  try{request=validateRequest(args)}catch(e){return fail('Invalid evidence request: '+e.message)}
  if(!request.ids.every(id=>id.startsWith('public:')&&permitted(id.slice(7))))
@@ -116,7 +117,7 @@ async function retrieveEvidence(args){
  const documents=request.ids.map(id=>catalog.find(d=>d.id===id));
  if(documents.some(d=>!d))return fail('A requested document was not found within the authorized catalog');
  const output=await assembleEvidence(request,documents,doc=>get(doc.pathname,{access:'public',storeId:storeId()}));
- return result(output);
+ return result(governedMode?governed.releasePackage(output):output);
 }
 async function verifyCoverage(args){
  const existing=await retrieveEvidence(args);
@@ -128,15 +129,16 @@ async function verifyCoverage(args){
   relevant_passages_omitted:report.relevant_passages_omitted,package_truncated:report.package_truncated,
   evidence_sufficiency:'NOT_ASSESSED',verified_absence:false});
 }
-async function discoverSources(args){
+async function discoverSources(args,governedMode=false){
  try{
   const query=String(args.query||'');termsOf(query);
   const limit=args.limit===undefined?12:args.limit;
   const docs=await entries();
-  return result(await discover(query,'public',docs,limit));
+  const report=await discover(query,'public',docs,limit);
+  return result(governedMode?governed.sanitizedDiscovery(report):report);
  }catch(e){return fail('Discovery failed: '+(e.message==='Invalid discovery scope'?'Invalid scope':'Review Master Table configuration or request'))}
 }
-async function retrieveTopicEvidence(args){
+async function retrieveTopicEvidence(args,governedMode=false){
  try{
   const query=String(args.query||'');termsOf(query);
   const mode=args.mode===undefined?'focused':args.mode;
@@ -144,17 +146,21 @@ async function retrieveTopicEvidence(args){
   const docs=await entries();
   const found=await discover(query,'public',docs,30);
   const ids=found.candidates.slice(0,4).map(x=>x.id);
-  if(!ids.length)return result({status:'NO_LEXICAL_CANDIDATES',discovery:found,evidence:null,
-   retrieval_quality:'NOT_ASSESSED',verified_absence:false});
+  if(!ids.length){
+   const empty={status:'NO_LEXICAL_CANDIDATES',discovery:found,evidence:null,
+    retrieval_quality:'NOT_ASSESSED',verified_absence:false};
+   return result(governedMode?governed.releaseTopic(empty):empty);
+  }
   const selected=ids.map(id=>docs.find(d=>d.id===id));
   const evidence=await assembleEvidence({query,mode,ids},selected,
    doc=>get(doc.pathname,{access:'public',storeId:storeId()}));
   const unexamined=found.candidates_found-ids.length;
   const discovery_warning=unexamined>0||found.unindexed_count>0||found.stale_count>0;
-  return result({status:'EVIDENCE_PACKAGE_CREATED',discovery:found,
+  const report={status:'EVIDENCE_PACKAGE_CREATED',discovery:found,
    selected_ids:ids,additional_candidates_not_examined:unexamined,
    discovery_coverage_status:discovery_warning?'WARN':'CANDIDATES_EXAMINED',
-   evidence,verified_absence:false});
+   evidence,verified_absence:false};
+  return result(governedMode?governed.releaseTopic(report):report);
  }catch(_e){return fail('Knowledge source discovery or evidence acquisition failed')}
 }
 function result(value){return {content:[{type:'text',text:JSON.stringify(value)}],structuredContent:value,isError:false}}
@@ -171,28 +177,29 @@ const TOOLS=[
  ,{name:'retrieve_topic_evidence',description:'Discover relevant public documents from Master Table and automatically acquire a bounded source evidence package from up to 4 best-ranked candidates. Reports candidates not examined; never claims complete domain coverage.',inputSchema:{type:'object',properties:{query:{type:'string',minLength:2,maxLength:200},mode:{type:'string',enum:['focused','comparative','comprehensive']}},required:['query'],additionalProperties:false},annotations:{readOnlyHint:true}}
 
 ];
-async function callTool(name,args){
+async function callTool(name,args,governedMode=false){
+ if(governedMode&&!governed.allowed(name))return fail('Operation not available in governed evidence-only mode');
  if(name==='list_documents'){
   const docs=await entries(),limit=Math.min(100,Math.max(1,Number(args.limit)||100));
   const subset=docs.filter(d=>(!args.category||d.category===args.category||d.pathname.startsWith(args.category+'/'))&&(!args.subfolder||d.subfolder===args.subfolder));
-  return result({documents:subset.slice(0,limit),total:subset.length,truncated:subset.length>limit});
+  return result({documents:governedMode?subset.slice(0,limit).map(governed.catalogEntry):subset.slice(0,limit),total:subset.length,truncated:subset.length>limit});
  }
  if(name==='search_documents'){
   const q=String(args.query||'').trim().toLowerCase();if(!q||q.length>200)return fail('Search query must contain 1–200 characters');
   const docs=await entries();const found=docs.filter(d=>[d.title,d.category,d.pathname,d.display_group].join(' ').toLowerCase().includes(q));
   const limit=Math.min(50,Math.max(1,Number(args.limit)||20));
-  return result({documents:found.slice(0,limit),total:found.length,search_scope:'metadata',truncated:found.length>limit});
+  return result({documents:governedMode?found.slice(0,limit).map(governed.catalogEntry):found.slice(0,limit),total:found.length,search_scope:'metadata',truncated:found.length>limit});
  }
  if(name==='search_content')return searchContent(args);
- if(name==='retrieve_evidence')return retrieveEvidence(args);
+ if(name==='retrieve_evidence')return retrieveEvidence(args,governedMode);
  if(name==='verify_coverage')return verifyCoverage(args);
- if(name==='discover_sources')return discoverSources(args);
- if(name==='retrieve_topic_evidence')return retrieveTopicEvidence(args);
+ if(name==='discover_sources')return discoverSources(args,governedMode);
+ if(name==='retrieve_topic_evidence')return retrieveTopicEvidence(args,governedMode);
  if(name==='get_document'||name==='get_document_metadata'||name==='get_document_structure'){
   const id=String(args.id||'');if(!id.startsWith('public:')||!permitted(id.slice(7)))return fail('Only categorized public document identifiers are allowed');
   const docs=await entries();const doc=docs.find(d=>d.id===id);
   if(!doc)return fail('Document not found in public catalog');
-  if(name==='get_document_metadata')return result(doc);
+  if(name==='get_document_metadata')return result(governedMode?governed.catalogEntry(doc):doc);
   if(name==='get_document_structure')return result({...doc,...await inspectStructure(doc)});
   const body=await getContent(doc,args);return result({...doc,...body});
  }
@@ -200,7 +207,8 @@ async function callTool(name,args){
 }
 function send(res,status,data){res.statusCode=status;res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.end(JSON.stringify(data))}
 function rpc(id,payload){return {jsonrpc:'2.0',id,...payload}}
-module.exports=async function(req,res){
+module.exports=async function(req,res,options={}){
+ const governedMode=options.governedEvidenceOnly===true;
  res.setHeader('Access-Control-Allow-Origin','*');
  res.setHeader('Access-Control-Allow-Methods','POST, OPTIONS');
  res.setHeader('Access-Control-Allow-Headers','content-type, mcp-protocol-version, mcp-session-id, authorization');
@@ -213,12 +221,12 @@ module.exports=async function(req,res){
  if(data.method==='notifications/initialized'){res.statusCode=202;return res.end()}
  if(data.jsonrpc!=='2.0'||!Object.prototype.hasOwnProperty.call(data,'id'))return send(res,400,{error:'Invalid JSON-RPC envelope'});
  try{
-  if(data.method==='initialize')return send(res,200,rpc(data.id,{result:{protocolVersion:VERSION,capabilities:{tools:{listChanged:false}},serverInfo:{name:'jori-knowledge-hub-public',version:'0.1.0'}}}));
+  if(data.method==='initialize')return send(res,200,rpc(data.id,{result:{protocolVersion:VERSION,capabilities:{tools:{listChanged:false}},serverInfo:{name:governedMode?'jori-knowledge-hub-governed-public':'jori-knowledge-hub-public',version:'0.1.0'}}}));
   if(data.method==='ping')return send(res,200,rpc(data.id,{result:{}}));
-  if(data.method==='tools/list')return send(res,200,rpc(data.id,{result:{tools:TOOLS}}));
+  if(data.method==='tools/list')return send(res,200,rpc(data.id,{result:{tools:governedMode?governed.advertised(TOOLS):TOOLS}}));
   if(data.method==='tools/call'){
    if(!data.params||typeof data.params.name!=='string')return send(res,200,rpc(data.id,{error:{code:-32602,message:'Invalid params'}}));
-   const output=await callTool(data.params.name,data.params.arguments||{});
+   const output=await callTool(data.params.name,data.params.arguments||{},governedMode);
    return send(res,200,rpc(data.id,{result:output}));
   }
   return send(res,200,rpc(data.id,{error:{code:-32601,message:'Method not found'}}));

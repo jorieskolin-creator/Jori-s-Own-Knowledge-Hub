@@ -4,6 +4,7 @@ const {put,get}=require('@vercel/blob');
 const {Readable}=require('node:stream');
 const BASE='https://jori-knowledge-hub.vercel.app';
 const RESOURCE=BASE+'/api/mcp-private';
+const GOVERNED_RESOURCE=BASE+'/api/mcp-governed-private';
 const SCOPE='documents:read';
 const privateStore=()=>process.env.PRIVATE_BLOB_STORE_ID||'store_YAAwH6FewcrImhA1';
 function key(){
@@ -96,18 +97,22 @@ function metadata(){
   token_endpoint_auth_methods_supported:['none'],code_challenge_methods_supported:['S256'],
   scopes_supported:[SCOPE,'offline_access'],service_documentation:BASE};
 }
-function resourceMetadata(){
- return {resource:RESOURCE,authorization_servers:[BASE],scopes_supported:[SCOPE],
-  bearer_methods_supported:['header'],resource_name:'Jori Knowledge Hub Private'};
+function resourceMetadata(resource=RESOURCE){
+ if(resource!==RESOURCE&&resource!==GOVERNED_RESOURCE)throw Error('Unknown protected resource');
+ return {resource,authorization_servers:[BASE],scopes_supported:[SCOPE],
+  bearer_methods_supported:['header'],resource_name:resource===GOVERNED_RESOURCE?'Jori Knowledge Hub Governed Evidence Private':'Jori Knowledge Hub Private'};
 }
 function challenge(res){
  res.setHeader('WWW-Authenticate','Bearer resource_metadata="'+BASE+'/.well-known/oauth-protected-resource", scope="'+SCOPE+'"');
 }
-function authorized(req){
+function authorized(req,resource=RESOURCE){
  const header=req.headers.authorization||'';
  const m=/^Bearer ([A-Za-z0-9_.-]+)$/.exec(header);
  const d=m?verify(m[1],'access'):null;
- return d&&(d.aud===RESOURCE||d.aud===BASE)&&d.iss===BASE&&d.scope===SCOPE?d:null;
+ // The governed resource accepts ONLY its own audience. Its token cannot call the full-document endpoint.
+ const audience=resource===GOVERNED_RESOURCE?d?.aud===GOVERNED_RESOURCE:
+  (d?.aud===RESOURCE||d?.aud===BASE);
+ return d&&audience&&d.iss===BASE&&d.scope===SCOPE?d:null;
 }
 function blobOptions(path){return {access:'private',storeId:privateStore(),addRandomSuffix:false,allowOverwrite:false,contentType:'application/json',ttlDays:path.includes('/refresh/')?31:1}}
 async function createUnique(path,body){return put(path,JSON.stringify(body),blobOptions(path))}
@@ -131,4 +136,4 @@ function token(sub,clientId,resource=RESOURCE){
  const refresh_token=sign({kind:'refresh',sub,client_id:clientId,scope:SCOPE,iss:BASE,aud:resource,iat:now,exp:now+30*86400000,jti:refreshId});
  return {access_token,token_type:'Bearer',expires_in:3600,refresh_token,scope:SCOPE};
 }
-module.exports={BASE,RESOURCE,SCOPE,client,safeRedirect,sign,verify,safeEqual,reply,secure,html,escape,readCookie,form,nonce,metadata,resourceMetadata,challenge,authorized,createUnique,readState,consumeOnce,token,hash};
+module.exports={BASE,RESOURCE,GOVERNED_RESOURCE,SCOPE,client,safeRedirect,sign,verify,safeEqual,reply,secure,html,escape,readCookie,form,nonce,metadata,resourceMetadata,challenge,authorized,createUnique,readState,consumeOnce,token,hash};

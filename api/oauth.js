@@ -2,7 +2,7 @@
 const crypto=require('node:crypto');
 const {valid}=require('./_auth');
 const O=require('./_oauth');
-const {BASE,RESOURCE,SCOPE,client,safeRedirect,sign,verify,safeEqual,reply,html,escape,readCookie,form,nonce,metadata,resourceMetadata,createUnique,readState,consumeOnce,token,hash}=O;
+const {BASE,RESOURCE,GOVERNED_RESOURCE,SCOPE,client,safeRedirect,sign,verify,safeEqual,reply,html,escape,readCookie,form,nonce,metadata,resourceMetadata,createUnique,readState,consumeOnce,token,hash}=O;
 function bad(res,desc,status=400){return reply(res,status,{error:'invalid_request',error_description:desc})}
 function method(req,res,wanted){if(req.method!==wanted){res.setHeader('Allow',wanted);return bad(res,'Method not allowed',405)}}
 function validAuth(q){
@@ -12,7 +12,7 @@ function validAuth(q){
  if(!/^[A-Za-z0-9_-]{43,128}$/.test(q.code_challenge||''))return false;
  if(typeof q.state!=='string'||q.state.length<8||q.state.length>2048)return false;
  if(q.scope&&q.scope!==SCOPE&&q.scope!==SCOPE+' offline_access')return false;
- if(q.resource&&q.resource!==RESOURCE&&q.resource!==BASE)return false;
+ if(q.resource&&q.resource!==RESOURCE&&q.resource!==BASE&&q.resource!==GOVERNED_RESOURCE)return false;
  return true;
 }
 function redirect(res,url){
@@ -35,9 +35,12 @@ async function authorize(req,res){
     client_id:q.client_id,redirect_uri:q.redirect_uri,state:q.state,
     challenge:q.code_challenge,scope:SCOPE,resource:q.resource||RESOURCE,
     admin_session_hash:hash(adminSession)}):null;
-  let content='<h1>Knowledge Hub · Private</h1><p>ChatGPT is requesting <strong>read-only access</strong> to documents in KnowledgeHub-Private. No upload, modification or deletion permission will be granted.</p>';
+  const governed=q.resource===GOVERNED_RESOURCE;
+   let content=governed?
+    '<h1>Knowledge Hub · Governed Evidence</h1><p>ChatGPT is requesting <strong>evidence-package-only</strong> access to Private documents. This connector does not expose full-document reading.</p>':
+    '<h1>Knowledge Hub · Private</h1><p>ChatGPT is requesting <strong>read-only access</strong> to documents in KnowledgeHub-Private. No upload, modification or deletion permission will be granted.</p>';
   if(!login)content+='<p class="warning">You must first sign in as Knowledge Hub administrator.</p><p><a target="_blank" rel="noopener noreferrer" href="/">Open Knowledge Hub login in a new tab</a>. After signing in, return to this page and refresh it.</p>';
-  else content+='<p>You are signed in as administrator. Approving will allow the connected ChatGPT client to read Private documents until you revoke or expire its authorization.</p><form method="POST" action="/oauth/authorize"><input type="hidden" name="request" value="'+escape(request)+'"><input type="hidden" name="consent" value="yes"><button type="submit">Authorize read-only access</button></form>';
+  else content+=(governed?'<p>You are signed in as administrator. Approving permits only bounded Evidence Packages from the governed Private MCP endpoint, not direct document reading.</p>':'<p>You are signed in as administrator. Approving will allow the connected ChatGPT client to read Private documents until you revoke or expire its authorization.</p>')+'<form method="POST" action="/oauth/authorize"><input type="hidden" name="request" value="'+escape(request)+'"><input type="hidden" name="consent" value="yes"><button type="submit">Authorize read-only access</button></form>';
   return html(res,200,content);
  }
  if(req.method!=='POST')return bad(res,'Method not allowed',405);
@@ -63,7 +66,7 @@ async function authorize(req,res){
  if(!adminSession||!a.admin_session_hash||!safeEqual(hash(adminSession),a.admin_session_hash))
   return html(res,403,'<h2>Administrator session changed</h2><p>Sign in to Knowledge Hub and restart the authorization request. The approval must use the same admin session that opened the consent form.</p>');
  const c=client(a.client_id);
- if(!c||!c.redirect_uris.includes(a.redirect_uri)||![RESOURCE,BASE].includes(a.resource)||a.scope!==SCOPE)return bad(res,'Invalid client or redirect URI');
+ if(!c||!c.redirect_uris.includes(a.redirect_uri)||![RESOURCE,BASE,GOVERNED_RESOURCE].includes(a.resource)||a.scope!==SCOPE)return bad(res,'Invalid client or redirect URI');
  const code=nonce();
  await createUnique('__mcp-oauth-codes/'+hash(code)+'.json',{client_id:a.client_id,redirect_uri:a.redirect_uri,
   challenge:a.challenge,resource:a.resource,scope:SCOPE,exp:Date.now()+180000});
@@ -94,7 +97,7 @@ async function exchange(req,res){
    return reply(res,400,{error:'invalid_grant'});
   const info=await readState('__mcp-oauth-codes/'+hash(b.code)+'.json');
   if(!info||info.exp<Date.now()||info.client_id!==b.client_id||info.redirect_uri!==b.redirect_uri
-    ||![RESOURCE,BASE].includes(info.resource)||info.scope!==SCOPE)return reply(res,400,{error:'invalid_grant'});
+    ||![RESOURCE,BASE,GOVERNED_RESOURCE].includes(info.resource)||info.scope!==SCOPE)return reply(res,400,{error:'invalid_grant'});
   const digest=crypto.createHash('sha256').update(b.code_verifier).digest('base64url');
   if(!safeEqual(digest,info.challenge))return reply(res,400,{error:'invalid_grant'});
   if(b.resource&&b.resource!==info.resource)return reply(res,400,{error:'invalid_target'});
@@ -103,7 +106,7 @@ async function exchange(req,res){
  }
  if(b.grant_type==='refresh_token'){
   const refresh=verify(b.refresh_token,'refresh');
-  if(!refresh||refresh.client_id!==b.client_id||refresh.iss!==BASE||![RESOURCE,BASE].includes(refresh.aud)||refresh.scope!==SCOPE)
+  if(!refresh||refresh.client_id!==b.client_id||refresh.iss!==BASE||![RESOURCE,BASE,GOVERNED_RESOURCE].includes(refresh.aud)||refresh.scope!==SCOPE)
    return reply(res,400,{error:'invalid_grant'});
   if(b.resource&&b.resource!==refresh.aud)return reply(res,400,{error:'invalid_target'});
   if(!await consumeOnce('refresh',refresh.jti))return reply(res,400,{error:'invalid_grant'});
@@ -121,6 +124,10 @@ module.exports=async function(req,res){
   if(route==='resource'){
    if(req.method!=='GET')return method(req,res,'GET');
    return reply(res,200,resourceMetadata());
+   }
+   if(route==='resource-governed'){
+    if(req.method!=='GET')return method(req,res,'GET');
+    return reply(res,200,resourceMetadata(GOVERNED_RESOURCE));
   }
   if(route==='authorize')return authorize(req,res);
   if(route==='register')return registration(req,res);
