@@ -25,7 +25,7 @@
  '<button id="mtImport" type="button" class="secondary">Import reviewed JSON</button>'+
  '<input class="hidden" type="file" id="mtJsonFile" accept=".json,application/json"></div>'+
  '<div id="mtPublication" class="mt-msg mt-publication" role="status"></div>'+'<div id="mtMessage" class="mt-msg" role="status"></div>'+
- '<div class="mt-main"><section class="mt-list"><table><thead><tr><th>Document</th><th>Access</th><th>Discovery description</th></tr></thead><tbody id="mtRows"></tbody></table></section>'+
+ '<div class="mt-main"><section class="mt-list"><table><thead><tr><th>#</th><th>Scope</th><th>Document and fields</th><th>Summary</th><th>Review status</th></tr></thead><tbody id="mtRows"></tbody></table></section>'+
  '<section id="mtEditor" class="mt-editor"><p>Select a document to edit its Master Table metadata.</p></section></div>';
  document.body.appendChild(dialog);
  const state={records:[],etag:null,selected:null,busy:false,publication:null,publishedCount:0,entryDirty:false};
@@ -50,6 +50,7 @@
   select.value=value??options[0][0];parent.append(select);return select;
  }
  function values(s){return String(s).split(/[\n,]/g).map(x=>x.trim()).filter(Boolean)}
+ function lines(s){return String(s).split(/\r?\n/).map(x=>x.trim()).filter(Boolean)}
  function edit(){
   const host=byId('mtEditor');host.replaceChildren();
   const item=state.records.find(r=>r.id===state.selected);
@@ -60,6 +61,10 @@
   field(host,'Source ID (not editable)',item.id,false,true);
   field(host,'Source metadata title (deterministic, not editable)',item.source_metadata_title||'',false,true);
   field(host,'Source hash (verified original bytes, if available)',item.source_hash||'Not available',false,true);
+  field(host,'Source last updated',item.source_updated||'Unknown',false,true);
+  field(host,'Source last updated at review',item.reviewed_source_updated||'Not recorded',false,true);
+  field(host,'Source metadata title at review',item.reviewed_source_metadata_title||'Not recorded',false,true);
+  field(host,'Source hash reported at review (not independently verified)',item.reported_source_hash||'Not available',false,true);
   const title=field(host,'Display title',item.title,false);
   const type=field(host,'Document type',item.document_type,false);
   const summary=field(host,'Summary (120–135 words)',item.summary,true);
@@ -76,9 +81,11 @@
   const textCoverage=choice(host,'Text extraction',item.text_extraction||'NOT_ASSESSED',[
    ['NOT_ASSESSED','Not assessed'],['COMPLETE','Complete'],['PARTIAL','Partial'],['FAILED','Failed']
   ]);
+  const textDetail=field(host,'Text extraction detail',item.text_extraction_detail||'',false);
   const visualCoverage=choice(host,'Visual inspection',item.visual_inspection||'NOT_ASSESSED',[
    ['NOT_ASSESSED','Not assessed'],['COMPLETE','Complete'],['PARTIAL','Partial']
   ]);
+  const visualDetail=field(host,'Visual inspection detail',item.visual_inspection_detail||'',false);
   const version=field(host,'Review version (optional)',item.review_version||'',false);
   const reviewStatus=choice(host,'Document lifecycle status',item.review_status||'Draft',[
    ['Approved','Approved — current source'],['Draft','Draft — under review'],
@@ -98,9 +105,10 @@
    save.disabled=true;
    try{
     const changes={title:title.value,document_type:type.value,summary:summary.value,key_terms:values(terms.value),
-     themes:values(themes.value),important_sections:values(sections.value),related_documents:values(relations.value),
+     themes:values(themes.value),important_sections:lines(sections.value),related_documents:lines(relations.value),
       related_source_ids:linkedSources.value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean),
      review_notes:notes.value,text_extraction:textCoverage.value,visual_inspection:visualCoverage.value,
+     text_extraction_detail:textDetail.value,visual_inspection_detail:visualDetail.value,
      review_version:version.value,review_status:reviewStatus.value};
     const out=await request('save',{id:item.id,expected_etag:state.etag,changes});
     await load(item.id);message('Entry saved to working draft, document status: '+out.record.review_status+'. Approve the Master Table to publish. Summary: '+out.quality.summary_words+' words.');
@@ -122,17 +130,15 @@
    [r.title,r.source_metadata_title,r.pathname,r.document_type,r.summary,r.review_notes,
     ...(r.important_sections||[]),...(r.key_terms||[]),...(r.themes||[])].join(' ').toLowerCase().includes(q));
   byId('mtCount').textContent=filtered.length+' / '+state.records.length+' entries';
-  for(const r of filtered){
+  for(const [index,r] of filtered.entries()){
    const tr=document.createElement('tr');if(r.id===state.selected)tr.className='mt-selected';
    if(r.review_status==='Obsolete')tr.classList.add('mt-obsolete');
-   const name=node('td');name.append(node('strong',r.title),node('div',r.pathname,'mt-small'));
-   const access=node('td',r.access);if(!r.source_available)access.append(node('div','Unavailable','mt-error'));
+   const name=node('td');name.append(node('strong',r.title),node('div',r.document_type||'', 'mt-small'),node('div',r.pathname,'mt-small'));
+   const access=node('td',r.access);access.append(node('div',r.category,'mt-small'));if(!r.source_available)access.append(node('div','Unavailable','mt-error'));
    if(r.source_changed)access.append(node('div','Changed','mt-error'));
-   const details=node('td');details.append(node('div',r.summary?.slice(0,150)||'(No summary yet)','mt-preview'),
-    node('div',(r.key_terms?.length||0)+' terms · '+(r.themes?.length||0)+' themes · '+
-     (r.review_status||'not saved')+' · Text: '+(r.text_extraction||'not assessed')+
-     ' · Visual: '+(r.visual_inspection||'not assessed'),'mt-small'));
-   tr.append(name,access,details);
+   const details=node('td');details.append(node('div',r.summary||'(No summary yet)','mt-preview'));
+   const lifecycle=node('td',r.review_status||'Draft');
+   tr.append(node('td',index+1),access,name,details,lifecycle);
    tr.onclick=()=>{state.selected=r.id;render();edit()};host.append(tr);
   }
  }
@@ -191,7 +197,12 @@
    if(!Array.isArray(records))throw Error('Expected JSON array or an object with records');
    if(!confirm('Import '+records.length+' reviewed records? Manually saved entries will be preserved; reviewed records may replace AI-only descriptions.'))return;
    const out=await request('import',{records,expected_etag:state.etag});
-   await load();message('Imported '+out.imported+' entries into working draft; skipped '+out.skipped+'. Approve Master Table to publish.');
+   await load();message('Imported '+out.imported+' entries into working draft; skipped '+out.skipped+
+    '; '+(out.version_review||[]).length+' need source-version review. Approve Master Table to publish.');
+   const issues=[...(out.skipped_entries||[]).map(x=>x.id+' — '+x.reason),
+    ...(out.version_review||[]).map(id=>id+' — source version needs review')];
+   if(issues.length){const details=node('details'),summary=node('summary','View import exceptions'),list=node('ul');
+    for(const issue of issues)list.append(node('li',issue));details.append(summary,list);byId('mtMessage').append(details);}
   }catch(e){message('Import failed: '+e.message,true)}finally{input.value=''}
  };
  byId('logout')?.addEventListener('click',()=>{if(dialog.open)dialog.close();state.records=[];state.etag=null});

@@ -46,11 +46,12 @@ function permitted(path){return typeof path==='string'&&path.length<=1024&&
  path.split('/').every(s=>s&&s!=='.'&&s!=='..'&&!s.startsWith('.'))&&CATS.has(path.split('/')[0]);}
 function words(s){return (String(s||'').trim().match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu)||[]).length;}
 function text(s,max=300){return String(s??'').trim().replace(/\s+/g,' ').slice(0,max);}
-function strings(input,max=30){
+function strings(input,max=30,itemMax=100){
  if(!Array.isArray(input))throw Error('Expected a list of terms or themes');
  const found=[],seen=new Set();
  for(const item of input){if(typeof item!=='string')throw Error('Invalid list entry');
-  const val=text(item,100);if(val&&!seen.has(val.toLowerCase())){found.push(val);seen.add(val.toLowerCase());}}
+  if(item.trim().length>itemMax)throw Error('List entry exceeds '+itemMax+' characters');
+  const val=text(item,itemMax);if(val&&!seen.has(val.toLowerCase())){found.push(val);seen.add(val.toLowerCase());}}
  if(found.length>max)throw Error('Too many list entries');return found;
 }
 function coverageState(value,allowed){
@@ -69,6 +70,11 @@ function withReviewFields(entry){
  e.source_hash=e.source_hash??null; // Reserved for a verified SHA-256 of the original file bytes.
  e.related_source_refs=Array.isArray(e.related_source_refs)?e.related_source_refs:[]; // Version-pinned IDs, not title guesses.
  e.review_notes=e.review_notes??'';
+ e.reviewed_source_updated=e.reviewed_source_updated??null;
+ e.reviewed_source_metadata_title=e.reviewed_source_metadata_title??'';
+ e.reported_source_hash=e.reported_source_hash??null;
+ e.text_extraction_detail=e.text_extraction_detail??'';
+ e.visual_inspection_detail=e.visual_inspection_detail??'';
  e.review_status=reviewStatus(e.review_status);
  e.review_version=e.review_version??'';
  e.last_reviewed=e.last_reviewed??null;
@@ -126,8 +132,8 @@ function normalizeEdit(entry,changes,options={}){
  if('key_terms'in changes)out.key_terms=strings(changes.key_terms,40);
  if('themes'in changes)out.themes=strings(changes.themes,20);
  if('document_type'in changes)out.document_type=text(changes.document_type,100);
- if('important_sections'in changes)out.important_sections=strings(changes.important_sections,60);
- if('related_documents'in changes)out.related_documents=strings(changes.related_documents,30);
+ if('important_sections'in changes)out.important_sections=strings(changes.important_sections,60,500);
+ if('related_documents'in changes)out.related_documents=strings(changes.related_documents,30,500);
  if('related_source_ids'in changes)out.related_source_refs=bindRelatedSourceIds(entry,changes.related_source_ids,options.records);
  if('review_notes'in changes){
   if(typeof changes.review_notes!=='string'||changes.review_notes.length>6000)throw Error('Review notes must be text up to 6000 characters');
@@ -136,6 +142,19 @@ function normalizeEdit(entry,changes,options={}){
  if('review_version'in changes){
   if(typeof changes.review_version!=='string'||changes.review_version.length>50)throw Error('Invalid review version');
   out.review_version=changes.review_version.trim();
+ }
+ for(const key of ['reviewed_source_metadata_title','text_extraction_detail','visual_inspection_detail']){
+  if(key in changes){if(typeof changes[key]!=='string'||changes[key].length>500)throw Error('Invalid review detail');out[key]=changes[key].trim();}
+ }
+ if('reviewed_source_updated'in changes){
+  const value=changes.reviewed_source_updated;
+  if(value!==null&&(typeof value!=='string'||!Number.isFinite(Date.parse(value))))throw Error('Invalid reviewed source date');
+  out.reviewed_source_updated=value===null?null:new Date(value).toISOString();
+ }
+ if('reported_source_hash'in changes){
+  const value=changes.reported_source_hash;
+  if(value!==null&&(typeof value!=='string'||!/^[a-f0-9]{64}$/.test(value)))throw Error('Invalid reported source hash');
+  out.reported_source_hash=value;
  }
  if('text_extraction'in changes){
   out.text_extraction=coverageState(changes.text_extraction,TEXT_EXTRACTION);
@@ -152,12 +171,13 @@ function normalizeEdit(entry,changes,options={}){
    const time=Date.parse(options.reviewedAt);
    if(!Number.isFinite(time))throw Error('Invalid last reviewed date');
    out.last_reviewed=new Date(time).toISOString();
-  }else out.last_reviewed=new Date().toISOString();
+  }else if(options.preserveReviewDate)out.last_reviewed=null;
+  else out.last_reviewed=new Date().toISOString();
  }
  out.last_saved=new Date().toISOString();
  if(entry.access==='private')out.enrichment='MANUAL';
  else if(changes.enrichment==='AI')out.enrichment='AI'; else out.enrichment='MANUAL';
- if(entry.source_changed)out.source_changed=false; // Admin saves after reviewing current source.
+ if(entry.source_changed&&!options.preserveSourceChanged)out.source_changed=false; // Admin saves after reviewing current source.
  return out;
 }
 function descriptionHealth(e){return {summary_words:words(e.summary),
