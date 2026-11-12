@@ -7,6 +7,8 @@ process.env.SESSION_SECRET='test-unified-governed-evidence-'.repeat(3);
 const OAuth=require('../api/_oauth');
 const handler=require('../api/mcp-governed-unified');
 const legacy=require('../api/mcp-private');
+const oauthApi=require('../api/oauth');
+const {sign:sessionSign}=require('../api/_auth');
 const oldGoverned=require('../api/mcp-governed-private');
 const {createService}=require('../api/_governed_unified');
 const publicStore=process.env.PUBLIC_BLOB_STORE_ID||process.env.BLOB_STORE_ID||'store_6mg9Vu2ypJJMAwV3';
@@ -154,4 +156,24 @@ test('Unified OAuth metadata advertises one exact protected resource',()=>{
  assert.ok(OAuth.authorized({headers:bearer(OAuth.UNIFIED_RESOURCE)},OAuth.UNIFIED_RESOURCE));
  assert.equal(OAuth.authorized({headers:bearer(OAuth.UNIFIED_RESOURCE)},OAuth.RESOURCE),null);
  assert.equal(OAuth.authorized({headers:bearer(OAuth.UNIFIED_RESOURCE)},OAuth.GOVERNED_RESOURCE),null);
+});
+
+test('Unified OAuth protected-resource route and consent explicitly name both source scopes',async()=>{
+ const metaRes=response();
+ await oauthApi({method:'GET',query:{route:'resource-unified'},headers:{}},metaRes);
+ assert.equal(metaRes.statusCode,200);
+ assert.equal(JSON.parse(metaRes.text).resource,OAuth.UNIFIED_RESOURCE);
+ const redirect='https://chatgpt.com/connector/oauth/unified-test';
+ const client_id='khc.'+OAuth.sign({kind:'client',redirect_uris:[redirect],exp:Date.now()+60000});
+ const cookie='__Host-kh_admin='+sessionSign('admin',1);
+ const consent=response();
+ await oauthApi({method:'GET',query:{route:'authorize',client_id,redirect_uri:redirect,
+  response_type:'code',code_challenge_method:'S256',code_challenge:'a'.repeat(43),
+  state:'valid_state_unified_123',scope:OAuth.SCOPE,resource:OAuth.UNIFIED_RESOURCE},
+  headers:{cookie}},consent);
+ assert.equal(consent.statusCode,200);
+ assert.match(consent.text,/both Public and Private/);
+ assert.match(consent.text,/evidence-package-only/);
+ const signed=consent.text.match(/name="request" value="([^"]+)"/)?.[1];
+ assert.equal(OAuth.verify(signed,'authorization').resource,OAuth.UNIFIED_RESOURCE);
 });
