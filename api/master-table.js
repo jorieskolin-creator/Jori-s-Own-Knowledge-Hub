@@ -10,7 +10,7 @@ function safeMutation(req){
  return req.headers?.['sec-fetch-site']==='same-origin';
 }
 function error(res,e){
- const status=e.status||(/size limit|too many|invalid|expected|must be/i.test(e.message)?400:503);
+ const status=e.status||(/model egress denied/i.test(e.message)?403:/size limit|too many|invalid|expected|must be/i.test(e.message)?400:503);
  // Never leak provider responses, credentials or service errors.
  return send(res,status,{error:status===503?'Master Table request failed; check application configuration or retry':e.message});
 }
@@ -61,7 +61,7 @@ async function enrich(res,body){
   return send(res,409,{error:'Public source is unavailable or changed; update inventory first'});
  if(doc.summary||doc.enrichment!=='NONE'||doc.key_terms?.length||doc.themes?.length)
   return send(res,409,{error:'Existing manually maintained content is preserved; edit it in Master Table'});
- const data=await extractPublic(doc);const enrichment=await callModel(doc,data);
+ const data=await extractPublic(doc);const enrichment=await callModel(doc,data,body.model_egress_approval);
  table.records[idx]=normalizeEdit(doc,enrichment,{markApproved:false});
  table.records[idx].enrichment='AI';
  table.records[idx].extraction_status=enrichment.extraction_status;
