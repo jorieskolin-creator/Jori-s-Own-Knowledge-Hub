@@ -10,7 +10,8 @@ const legacy=require('../api/mcp-private');
 const oauthApi=require('../api/oauth');
 const {sign:sessionSign}=require('../api/_auth');
 const oldGoverned=require('../api/mcp-governed-private');
-const {createService}=require('../api/_governed_unified');
+const {createService,metadata}=require('../api/_governed_unified');
+const {sourceSignature}=require('../api/_master_table');
 const publicStore=process.env.PUBLIC_BLOB_STORE_ID||process.env.BLOB_STORE_ID||'store_6mg9Vu2ypJJMAwV3';
 const privateStore=process.env.PRIVATE_BLOB_STORE_ID||'store_YAAwH6FewcrImhA1';
 const path='02-frameworks/governance.html';
@@ -36,7 +37,7 @@ function harness(config={}){
    assert.equal(storeId,access==='public'?publicStore:privateStore);
    return fixture(access);
   },
-  readMaster:async()=>({table:{records:[]}})
+  readMaster:async()=>({table:{records:config.records||[]}})
  });
 }
 function response(){
@@ -176,4 +177,21 @@ test('Unified OAuth protected-resource route and consent explicitly name both so
  assert.match(consent.text,/evidence-package-only/);
  const signed=consent.text.match(/name="request" value="([^"]+)"/)?.[1];
  assert.equal(OAuth.verify(signed,'authorization').resource,OAuth.UNIFIED_RESOURCE);
+});
+
+test('Master Table discovery hints cannot become answer evidence without matching source passages',async()=>{
+ const records=['public','private'].map(scope=>{
+  const base=metadata(blob(scope),scope);
+  return {...base,source_signature:sourceSignature(base),source_available:true,source_changed:false,
+   summary:'Quantum topology control is documented here',key_terms:['quantum topology'],
+   themes:['quantum anomaly'],review_notes:'Unverified wording is not source evidence'};
+ });
+ const h=harness({records});
+ const search=await h.execute('discover_sources',{query:'quantum topology'});
+ assert.equal(search.candidates_found,2);
+ assert.ok(search.candidates.every(c=>!('review_notes' in c)));
+ const r=await h.topic({query:'quantum topology'});
+ assert.equal(r.delivery_status,'NO_SUPPORTING_EVIDENCE');
+ assert.equal(r.evidence,null);
+ assert.equal(r.retrieval_quality.verified_absence,false);
 });
