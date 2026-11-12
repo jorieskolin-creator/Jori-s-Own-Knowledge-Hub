@@ -1,7 +1,7 @@
 'use strict';
 // Deterministic retrieval-integrity gate. PASS never asserts factual correctness or semantic completeness.
 const {createHash}=require('node:crypto');
-const POLICY_VERSION='retrieval-integrity-v1';
+const POLICY_VERSION='retrieval-integrity-v2';
 const sha256=s=>createHash('sha256').update(s,'utf8').digest('hex');
 function citationValid(p,sources){
  const source=sources.find(s=>s.id===p.id);
