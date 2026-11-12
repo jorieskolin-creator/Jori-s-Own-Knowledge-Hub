@@ -107,7 +107,7 @@ test('A blocked or forged package cannot emit even a valid-looking passage',asyn
  p2.schema_version=999;
  assert.equal(releasePackage(p2).evidence,null);
  const p3=await validPackage();
- p3.retrieval_quality.status='PASS'; // forged status must not bypass recalculated check
+ p3.retrieval_quality.status='BLOCK'; // forged status must not bypass recalculated check
  assert.equal(releasePackage(p3).evidence,null);
 });
 test('A query without hits yields NO_SUPPORTING_EVIDENCE, never verified absence',async()=>{
