@@ -299,3 +299,26 @@ See `tests/document-text-limit.test.js` and the long-source regression test in `
 **Storage compatibility:** The existing schema remains v1, with additive `publication` and `published_records` fields. Legacy Master Tables are treated as a last-published snapshot on first read so existing discovery is not inadvertently wiped out when the workflow changes. The index remains in the protected Blob store; access classification of the original sources is unchanged. A newly saved entry, an import, an AI enrichment, a delete or a source inventory reconciliation does not silently approve/publish the working table.
 
 **Important boundary:** This governs **discovery metadata**, not direct access to authorized sources. A source marked Obsolete can still be retrieved by exact ID, and status alone does not establish that its content is true or safe to transmit to a model. Evidence Packages continue to require provenance and retrieval quality gates.
+
+## Approved-only source eligibility for all Knowledge Hub MCP connections
+
+**Rule: Only documents explicitly marked `Approved` in the last published Master Table are eligible for normal MCP source discovery, direct source reading, content search, coverage checks and Evidence Package generation.** This is a deterministic server-side rule, not a ChatGPT prompt instruction.
+
+Eligibility requires all of the following simultaneously:
+
+1. The document ID is present in the **last approved/published Master Table snapshot**, not merely a working edit.
+2. Its `review_status` is exactly `Approved`.
+3. Its source still exists and is available, is in its original Public/Private access scope, is not flagged `source_changed`, and the approved metadata-version signature still matches current Blob inventory metadata.
+4. Source re-authorization occurs immediately before content is opened, preventing status changes between discovery and source extraction from silently bypassing approval.
+
+**Draft**, **Obsolete**, **unindexed**, **missing**, **changed** or **unavailable** sources do not enter ordinary evidence or search. Attempts to retrieve them **by exact source ID** also fail, including `get_document`, `get_document_structure`, `search_content`, `retrieve_evidence`, `verify_coverage`, `retrieve_topic_evidence`, and the unified governed MCP. Previous discovery title/path fallback for unapproved/unindexed documents has been removed.
+
+This applies to all five existing MCP entrypoints: Public, Private, governed Public, governed Private and governed unified Public+Private. The Public+Private combined inventory is filtered using the same published status contract.
+
+**Document preservation and authoring:** Non-Approved source files are **not deleted** or reclassified in Blob. They remain visible to the authenticated administrator in the Master Table editor and can be inspected via the owner's administrative/document-management workflow for drafting, historical comparison, and deliberate re-approval. The normal MCP evidence interfaces do **not** have a historical-review bypass. In particular, if creating new Private Master Table summaries relied on reading Draft documents through standard MCP `get_document`, that direct-reading workflow is now unavailable; use the authorized document-management route or provide source files directly for authoring until a separately scoped administrative-review connector is implemented.
+
+**Publication timing:** Saving the document status `Approved` is not sufficient. After finishing review, the administrator must select **Save & approve Master Table**. Conversely, a working edit marking a previously published Approved source Obsolete does not revoke the prior approved snapshot until the Master Table is published; for urgent revocation, publish the updated table immediately. Source mutation invalidates a previously approved source signature even before the next table publication.
+
+**Safety limitation:** This controls **normal MCP source eligibility**, not what other external websites or separately configured connectors can show. Public Blob files and the ordinary Knowledge Hub website are not made inaccessible by this rule. `Approved` is a human lifecycle decision, not a substitute for recipient-specific data-egress/privacy gates, factual verification, or semantic evidence sufficiency.
+
+Regression coverage: `tests/approved-policy.test.js`, `tests/master-table-lifecycle.test.js`, and `tests/master-table.test.js`.
