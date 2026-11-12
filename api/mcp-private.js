@@ -7,6 +7,7 @@ const {boundedHtmlText}=require('./_document_text_limit');
 const {searchFile,termsOf,MAX_RESULTS,MAX_DOCUMENTS}=require('./_content_search');
 const {assembleEvidence,validateRequest,MODES}=require('./_evidence_package');
 const {discover}=require('./_master_discovery');
+const approval=require('./_approved_sources');
 const governed=require('./_governed_evidence');
 const OAuth=require('./_oauth');
 const VERSION='2025-03-26';
@@ -40,7 +41,11 @@ function metadata(b){
 async function entries(){
  let cursor,all=[];
  do{const r=await list({storeId:storeId(),limit:1000,...(cursor?{cursor}:{})});all.push(...r.blobs);cursor=r.hasMore?r.cursor:null}while(cursor);
- return all.filter(b=>permitted(b.pathname)).map(metadata);
+ return approval.authorizedCatalog(all.filter(b=>permitted(b.pathname)).map(metadata));
+}
+async function approvedFile(doc){
+ await approval.requireApprovedSource(doc);
+ return get(doc.pathname,{access:'private',storeId:storeId()});
 }
 function stripHtml(h){
  return h.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi,' ').replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi,' ')
@@ -50,7 +55,7 @@ function stripHtml(h){
 }
 async function getContent(doc,options={}){
  if(!permitted(doc.pathname)||doc.access!=='private')throw Error('Not permitted');
- const file=await get(doc.pathname,{access:'private',storeId:storeId()});
+ const file=await approvedFile(doc);
  if(!file||!file.stream)throw Error('Document not found');
  if(doc.mime_type==='application/pdf')return pdfText(file,options);
  if(file.size>MAX_BYTES)throw Error('Document exceeds maximum retrieval size');
@@ -66,7 +71,7 @@ async function getContent(doc,options={}){
 
 async function inspectStructure(doc){
  if(!permitted(doc.pathname)||doc.access!=='private')throw Error('Not permitted');
- const file=await get(doc.pathname,{access:'private',storeId:storeId()});
+ const file=await approvedFile(doc);
  if(!file||!file.stream)throw Error('Document not found');
  return doc.mime_type==='application/pdf'?pdfText(file,{structure_only:true}):htmlStructure(file);
 }
@@ -88,7 +93,7 @@ async function searchContent(args){
  for(const doc of chosen){
   if(Date.now()+1000>=deadline){failures.push({id:doc.id,reason:'Request processing time budget exhausted; document not examined'});continue;}
   try{
-   const file=await get(doc.pathname,{access:'private',storeId:storeId()});
+   const file=await approvedFile(doc);
    if(!file||!file.stream)throw Error('Document unavailable');
    const index=await searchFile(file,doc.mime_type,query,MAX_RESULTS,deadline-Date.now());
    inspected.push({id:doc.id,pathname:doc.pathname,...index.coverage,matching_segments:index.total_matches,
@@ -118,7 +123,7 @@ async function retrieveEvidence(args,governedMode=false){
  const catalog=await entries();
  const documents=request.ids.map(id=>catalog.find(d=>d.id===id));
  if(documents.some(d=>!d))return fail('A requested document was not found within the authorized catalog');
- const output=await assembleEvidence(request,documents,doc=>get(doc.pathname,{access:'private',storeId:storeId()}));
+ const output=await assembleEvidence(request,documents,doc=>approvedFile(doc));
  return result(governedMode?governed.releasePackage(output):output);
 }
 async function verifyCoverage(args){
@@ -155,7 +160,7 @@ async function retrieveTopicEvidence(args,governedMode=false){
   }
   const selected=ids.map(id=>docs.find(d=>d.id===id));
   const evidence=await assembleEvidence({query,mode,ids},selected,
-   doc=>get(doc.pathname,{access:'private',storeId:storeId()}));
+   doc=>approvedFile(doc));
   const unexamined=found.candidates_found-ids.length;
   const discovery_warning=unexamined>0||found.unindexed_count>0||found.stale_count>0;
   const report={status:'EVIDENCE_PACKAGE_CREATED',discovery:found,
