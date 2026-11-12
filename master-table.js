@@ -139,11 +139,17 @@
    await load();message('Inventory: '+d.added.length+' new, '+d.changed.length+' changed, '+d.unavailable.length+' unavailable.'+
     (d.warnings?.length?' Warnings: '+d.warnings.join('; '):''),!!d.warnings?.length);
    const pending=d.pending_public||[];
-   if(pending.length&&!confirm('Use GPT-6.1 Terra to enrich '+pending.length+' Public documents? Private documents will NOT be sent.'))return;
+   if(pending.length&&!confirm('Send extracted text from '+pending.length+' PUBLIC documents to OpenAI for Master Table metadata? Public storage is NOT proof of privacy clearance. Review the sources before approving. Private documents are excluded.'))return;
    let okay=0,failed=0;
    for(let i=0;i<pending.length;i++){
     message('Enriching Public source '+(i+1)+' of '+pending.length+'…');
-    try{await request('enrich',{id:pending[i],expected_etag:state.etag});okay++}
+    try{
+      const source=state.records.find(r=>r.id===pending[i]);
+      if(!source||source.access!=='public'||!source.source_signature)throw Error('Current source version unavailable for authorization');
+      const model_egress_approval={approved:true,source_id:source.id,source_signature:source.source_signature,
+       purpose:'master_table_discovery_enrichment',recipient:'openai.responses',approved_at:new Date().toISOString()};
+      await request('enrich',{id:pending[i],expected_etag:state.etag,model_egress_approval});okay++
+     }
     catch(e){failed++;message('AI enrichment failed: '+e.message,true)}
     await load();
    }
