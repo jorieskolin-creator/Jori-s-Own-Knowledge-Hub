@@ -85,7 +85,7 @@ test('Unified MCP rejects exact Draft/Obsolete IDs before any document bytes are
   readMaster:async()=>({table:baseline})
  });
  const cat=await service.catalog();
- assert.equal(cat.length,2); // Approved appears once in Public and once in Private.
+ assert.equal(cat.length,1); // Only Private Approved has a matching published source ID.
  assert.ok(cat.every(x=>x.access==='private'||x.access==='public'));
  // Only Private Approved is eligible: test store enumerations are both populated.
  assert.deepEqual(cat.map(x=>x.id),[source('Approved').id]);
