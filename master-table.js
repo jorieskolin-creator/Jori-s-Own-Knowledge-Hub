@@ -85,7 +85,7 @@
    ['Obsolete','Obsolete — retained for historical comparison']
   ]);
   field(host,'Last reviewed (recorded when entry is saved)',item.last_reviewed||'Not yet reviewed',false,true);
-  host.append(node('p','Save entry stages changes without publishing. Save & approve Master Table publishes the working table. Obsolete source files remain stored and retrievable by ID.','mt-small'));
+  host.append(node('p','Save entry stages changes without publishing. Save & approve Master Table publishes the working table. Obsolete files remain stored for administrative review but are blocked from normal MCP retrieval, even by ID.','mt-small'));
   state.entryDirty=false;
   byId('mtApprove').disabled=false;
   host.addEventListener('input',()=>{state.entryDirty=true;byId('mtApprove').disabled=true},{once:true});
@@ -140,7 +140,8 @@
   const d=await request('load');state.records=d.records||[];state.etag=d.etag??null;
   state.publication=d.publication||{status:'Draft',approved_at:null};state.publishedCount=d.published_count||0;
   byId('mtPublication').textContent='Master Table: '+state.publication.status+' · Last approved: '+
-   (state.publication.approved_at||'Not yet')+' · Published entries: '+state.publishedCount;
+   (state.publication.approved_at||'Not yet')+' · Published entries: '+state.publishedCount+
+   ' · MCP access: Published Approved documents only';
   state.selected=state.records.some(r=>r.id===selected)?selected:null;render();edit();
  }
  async function update(){
