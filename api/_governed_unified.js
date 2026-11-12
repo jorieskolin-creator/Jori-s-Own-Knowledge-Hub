@@ -87,13 +87,15 @@ function createService(deps={}){
    discoverCall(query,scope,docs.filter(d=>d.access===scope),30,records)));
   const candidates=[...pub.candidates,...priv.candidates].sort((a,b)=>
     b.score-a.score||a.id.localeCompare(b.id));
-  const available=candidates.length,returned=candidates.slice(0,limit);
+  const totalFound=pub.candidates_found+priv.candidates_found;
+  const returned=candidates.slice(0,limit);
   const missing=pub.unindexed_count+priv.unindexed_count;
   const stale=pub.stale_count+priv.stale_count;
   return governed.sanitizedDiscovery({
    query,scope:'public+private',discovery_method:'master_table_with_metadata_fallback',
    discovery_complete:false,inventory_documents:docs.length,
-   candidates_found:available,candidates_returned:returned.length,candidates_truncated:available>limit,
+   candidates_found:totalFound,candidates_returned:returned.length,
+   candidates_truncated:totalFound>limit||pub.candidates_truncated||priv.candidates_truncated,
    public_candidates:pub.candidates_found,private_candidates:priv.candidates_found,
    unindexed_count:missing,stale_count:stale,
    candidates:returned,
