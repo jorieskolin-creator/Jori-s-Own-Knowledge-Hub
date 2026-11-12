@@ -223,6 +223,29 @@
             "null"
           ],
           "format": "date-time"
+        },
+        "related_source_refs": {
+          "type": "array",
+          "maxItems": 30,
+          "description": "Verified relationships bound to a target source ID and metadata-version signature (not original file-byte SHA-256).",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "source_signature"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 1150
+              },
+              "source_signature": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          }
         }
       }
     }

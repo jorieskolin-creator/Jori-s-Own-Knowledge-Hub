@@ -3,6 +3,7 @@
 const {get}=require('@vercel/blob');
 const {htmlSegments,pdfSegments}=require('./_content_search');
 const {words,strings}=require('./_master_table');
+const {authorizePublicEnrichment}=require('./_model_egress');
 const SOURCE_BUDGET=350000;
 function reassemble(segments){
  let result='',last=new Map(),limited=false;
@@ -40,7 +41,9 @@ const schema={
   related_documents:{type:'array',items:{type:'string'}}
  },required:['summary','key_terms','themes','document_type','important_sections','related_documents']
 };
-async function callModel(doc,source){
+async function callModel(doc,source,approval){
+ // No external call is allowed without a current, source-bound admin approval.
+ authorizePublicEnrichment(doc,source,approval);
  const key=process.env.KNOWLEDGE_HUB_API_KEY;
  if(!key)throw Error('KNOWLEDGE_HUB_API_KEY is not configured');
  if(/^(?:sk|rk)_(?:live|test)_/.test(key))

@@ -48,7 +48,8 @@ function pick(ranked,config,budget){
   if(already.some(r=>Math.min(r.end,match.end)-Math.max(r.start,match.start)>Math.min(120,(match.end-match.start)*0.4)))continue;
   const text=match.passage.slice(0,budget);
   if(text.length<100&&match.passage.length>=100)break;
-  selected.push({...match,passage:text,passage_truncated:match.passage.length>text.length||!match.context_complete});
+  selected.push({...match,passage:text,end:match.start+text.length,
+    passage_truncated:match.passage.length>text.length||!match.context_complete});
   budget-=text.length;
   bySource.set(match.id,count+1);
   already.push({start:match.start,end:match.start+text.length});
@@ -76,6 +77,7 @@ async function assembleEvidence(args,docs,openFile){
    const matches=searchSegments(index.segments,req.query,1000);
    sources.push({id:doc.id,title:doc.title,pathname:doc.pathname,
     access:doc.access,document_type:coverage.document_type,
+    original_file_sha256:coverage.original_file_sha256,
     extraction_complete:coverage.extraction_complete,
     examined_pages:coverage.examined_pages??null,total_pages:coverage.total_pages??null,
     ocr_required_pages:coverage.ocr_required_pages||[],
@@ -111,7 +113,9 @@ async function assembleEvidence(args,docs,openFile){
  if(incomplete)limitations.push('One or more documents or pages could not be fully examined.');
  if(omitted)limitations.push('Additional matching passages were withheld by package limits.');
  if(candidateCapReached)limitations.push('Candidate match enumeration was capped within at least one source.');
+ const sourceHashes=new Map(sources.map(s=>[s.id,s.original_file_sha256]));
  const result={
+  schema_version:1,
   request:{query:req.query,mode:req.mode,requested_document_ids:req.ids},
   search_method:'deterministic_lexical_with_context',
   status:incomplete?'PARTIAL_EXTRACTION':candidates.length===0?'NO_LEXICAL_MATCH':'MATCHES_FOUND',
@@ -121,7 +125,8 @@ async function assembleEvidence(args,docs,openFile){
   source_coverage:sources,failures,
   passages:packaged.passages.map(({source_order,context_complete,...p},n)=>({...p,
    passage_id:'E'+String(n+1).padStart(3,'0'),context_complete,
-   source_sha256:sha256(p.id+'|'+(p.page??'')+'|'+(p.section??'')+'|'+p.start+'|'+p.passage)})),
+   source_sha256:sourceHashes.get(p.id),
+   passage_sha256:sha256(p.id+'|'+(p.page??'')+'|'+(p.section??'')+'|'+p.start+'|'+p.passage)})),
   matching_segments_found:candidates.length,
   passages_returned:packaged.passages.length,
   relevant_passages_omitted:omitted,

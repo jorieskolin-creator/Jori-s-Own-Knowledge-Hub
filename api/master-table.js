@@ -1,6 +1,6 @@
 'use strict';
 const {send,valid,postBody}=require('./_auth');
-const {readMaster,writeMaster,sourceInventory,reconcile,normalizeEdit,descriptionHealth,MASTER_TABLE_FORMAT}=require('./_master_table');
+const {readMaster,writeMaster,sourceInventory,reconcile,normalizeEdit,inspectSourceLinks,descriptionHealth,MASTER_TABLE_FORMAT}=require('./_master_table');
 const {extractPublic,callModel}=require('./_master_enrich');
 function safeMutation(req){
  const origin=req.headers?.origin,host=req.headers?.host;
@@ -10,7 +10,7 @@ function safeMutation(req){
  return req.headers?.['sec-fetch-site']==='same-origin';
 }
 function error(res,e){
- const status=e.status||(/size limit|too many|invalid|expected|must be/i.test(e.message)?400:503);
+ const status=e.status||(/model egress denied/i.test(e.message)?403:/size limit|too many|invalid|expected|must be/i.test(e.message)?400:503);
  // Never leak provider responses, credentials or service errors.
  return send(res,status,{error:status===503?'Master Table request failed; check application configuration or retry':e.message});
 }
@@ -24,7 +24,7 @@ async function save(res,body){
  const idx=table.records.findIndex(x=>x.id===body.id);
  if(idx<0)return send(res,404,{error:'Master Table entry not found'});
  const entry=table.records[idx];
- const edited=normalizeEdit(entry,body.changes);
+ const edited=normalizeEdit(entry,body.changes,{records:table.records});
  table.records[idx]=edited;
  await writeMaster(table,etag);
  return send(res,200,{saved:true,record:edited,quality:descriptionHealth(edited)});
@@ -61,7 +61,7 @@ async function enrich(res,body){
   return send(res,409,{error:'Public source is unavailable or changed; update inventory first'});
  if(doc.summary||doc.enrichment!=='NONE'||doc.key_terms?.length||doc.themes?.length)
   return send(res,409,{error:'Existing manually maintained content is preserved; edit it in Master Table'});
- const data=await extractPublic(doc);const enrichment=await callModel(doc,data);
+ const data=await extractPublic(doc);const enrichment=await callModel(doc,data,body.model_egress_approval);
  table.records[idx]=normalizeEdit(doc,enrichment,{markApproved:false});
  table.records[idx].enrichment='AI';
  table.records[idx].extraction_status=enrichment.extraction_status;
@@ -86,12 +86,12 @@ async function importEntries(res,body){
    skipped++;continue;
   }
   const changes={};
-  for(const k of ['title','summary','key_terms','themes','document_type','important_sections','related_documents',
+  for(const k of ['title','summary','key_terms','themes','document_type','important_sections','related_documents','related_source_ids',
    'review_notes','review_version','text_extraction','visual_inspection'])
    if(Object.prototype.hasOwnProperty.call(row,k))changes[k]=row[k];
   // The imported table has already been reviewed by the Admin. Preserve its
   // source-review timestamp when supplied; do not trust imported source hashes.
-  table.records[i]=normalizeEdit(existing,changes,{reviewedAt:row.last_reviewed??undefined});modified++;
+  table.records[i]=normalizeEdit(existing,changes,{reviewedAt:row.last_reviewed??undefined,records:table.records});modified++;
  }
  if(modified)await writeMaster(table,etag);
  return send(res,200,{imported:modified,skipped,
@@ -104,7 +104,7 @@ module.exports=async function(req,res){
   if(req.method==='GET'){
    const {table,etag}=await readMaster();
    return send(res,200,{schema_version:1,master_table_format:MASTER_TABLE_FORMAT,etag,updated_at:table.updated_at,
-    records:table.records.map(r=>({...r,quality:descriptionHealth(r)})),count:table.records.length});
+    records:table.records.map(r=>({...r,related_source_links:inspectSourceLinks(r,table.records),quality:descriptionHealth(r)})),count:table.records.length});
   }
   if(req.method!=='POST')return send(res,405,{error:'Method not allowed'});
   if(!safeMutation(req))return send(res,403,{error:'Same-origin administrator action required'});

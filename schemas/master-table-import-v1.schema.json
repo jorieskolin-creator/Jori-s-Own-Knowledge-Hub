@@ -118,6 +118,16 @@
             "COMPLETE",
             "PARTIAL"
           ]
+        },
+        "related_source_ids": {
+          "type": "array",
+          "maxItems": 30,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "maxLength": 1150
+          },
+          "description": "Optional source identifiers. Server verifies source existence, access and current metadata signature before binding."
         }
       }
     }

@@ -30,6 +30,8 @@ test('HTML content search indexes text across headings without scripts',async()=
  const r=await searchFile(htmlFile(raw),'text/html','owner approval',10);
  assert.equal(r.coverage.document_type,'html');
  assert.equal(r.coverage.extraction_complete,true);
+ assert.equal(r.coverage.original_file_sha256,
+   require('node:crypto').createHash('sha256').update(raw).digest('hex'));
  assert.ok(r.matches.length>=1);
  assert.equal(r.matches[0].heading,'Risk and exceptions');
  assert.equal(r.matches[0].section,2);

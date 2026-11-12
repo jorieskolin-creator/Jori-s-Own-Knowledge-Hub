@@ -1,0 +1,451 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jori-knowledge-hub.vercel.app/schemas/evidence-package-v1.schema.json",
+  "title": "Knowledge Hub Evidence Package v1",
+  "description": "Versioned, bounded retrieval artifact. Passage SHA-256 hashes locator+selected text, source SHA-256 hashes complete original file bytes. Retrieval PASS does not certify domain sufficiency, factual accuracy, semantic completeness or absence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request",
+    "search_method",
+    "status",
+    "inspected_source_count",
+    "requested_source_count",
+    "selected_scope_examined",
+    "source_extraction_complete",
+    "source_coverage",
+    "failures",
+    "passages",
+    "matching_segments_found",
+    "passages_returned",
+    "relevant_passages_omitted",
+    "package_truncated",
+    "remaining_character_budget",
+    "evidence_sufficiency",
+    "limitations",
+    "retrieval_quality"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query",
+        "mode",
+        "requested_document_ids"
+      ],
+      "properties": {
+        "query": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 200
+        },
+        "mode": {
+          "enum": [
+            "focused",
+            "comparative",
+            "comprehensive"
+          ]
+        },
+        "requested_document_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true
+        }
+      }
+    },
+    "search_method": {
+      "const": "deterministic_lexical_with_context"
+    },
+    "status": {
+      "enum": [
+        "MATCHES_FOUND",
+        "NO_LEXICAL_MATCH",
+        "PARTIAL_EXTRACTION"
+      ]
+    },
+    "inspected_source_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "requested_source_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "selected_scope_examined": {
+      "type": "boolean"
+    },
+    "source_extraction_complete": {
+      "type": "boolean"
+    },
+    "source_coverage": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/source"
+      }
+    },
+    "failures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "passages": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/passage"
+      }
+    },
+    "matching_segments_found": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "passages_returned": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "relevant_passages_omitted": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "package_truncated": {
+      "type": "boolean"
+    },
+    "remaining_character_budget": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "evidence_sufficiency": {
+      "const": "NOT_ASSESSED"
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "retrieval_quality": {
+      "$ref": "#/$defs/retrieval_quality"
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "pathname",
+        "access",
+        "document_type",
+        "original_file_sha256",
+        "extraction_complete",
+        "examined_pages",
+        "total_pages",
+        "ocr_required_pages",
+        "indexed_sections",
+        "indexed_segments",
+        "matching_segments",
+        "candidate_matches_capped",
+        "limitations"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "pathname": {
+          "type": "string"
+        },
+        "access": {
+          "enum": [
+            "public",
+            "private"
+          ]
+        },
+        "document_type": {
+          "enum": [
+            "html",
+            "pdf"
+          ]
+        },
+        "original_file_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "extraction_complete": {
+          "type": "boolean"
+        },
+        "examined_pages": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "total_pages": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "ocr_required_pages": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "indexed_sections": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "indexed_segments": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "matching_segments": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "candidate_matches_capped": {
+          "type": "boolean"
+        },
+        "limitations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "passage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "title",
+        "pathname",
+        "access",
+        "page",
+        "section",
+        "heading",
+        "score",
+        "matched_terms",
+        "passage",
+        "start",
+        "end",
+        "source_verified",
+        "passage_truncated",
+        "passage_id",
+        "context_complete",
+        "source_sha256",
+        "passage_sha256"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "pathname": {
+          "type": "string"
+        },
+        "access": {
+          "enum": [
+            "public",
+            "private"
+          ]
+        },
+        "page": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "section": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "heading": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "score": {
+          "type": "number"
+        },
+        "matched_terms": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "passage": {
+          "type": "string"
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source_verified": {
+          "type": "boolean"
+        },
+        "passage_truncated": {
+          "type": "boolean"
+        },
+        "passage_id": {
+          "type": "string",
+          "pattern": "^E[0-9]{3,}$"
+        },
+        "context_complete": {
+          "type": "boolean"
+        },
+        "source_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "passage_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "retrieval_quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_version",
+        "status",
+        "gates",
+        "blocking_reasons",
+        "warnings",
+        "authority",
+        "evidence_sufficiency",
+        "verified_absence",
+        "notes"
+      ],
+      "properties": {
+        "policy_version": {
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "PASS",
+            "WARN",
+            "BLOCK"
+          ]
+        },
+        "gates": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source_scope",
+            "extraction",
+            "passage_provenance",
+            "original_source_hash",
+            "bounded_output",
+            "relevance_completeness"
+          ],
+          "properties": {
+            "source_scope": {
+              "enum": [
+                "PASS",
+                "FAIL"
+              ]
+            },
+            "extraction": {
+              "enum": [
+                "PASS",
+                "PARTIAL",
+                "FAIL"
+              ]
+            },
+            "passage_provenance": {
+              "enum": [
+                "PASS",
+                "FAIL"
+              ]
+            },
+            "original_source_hash": {
+              "enum": [
+                "PASS",
+                "FAIL"
+              ]
+            },
+            "bounded_output": {
+              "enum": [
+                "PASS",
+                "WARN"
+              ]
+            },
+            "relevance_completeness": {
+              "const": "NOT_VERIFIED"
+            }
+          }
+        },
+        "blocking_reasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "authority": {
+          "const": "retrieval_integrity_only"
+        },
+        "evidence_sufficiency": {
+          "const": "NOT_ASSESSED"
+        },
+        "verified_absence": {
+          "const": false
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}
