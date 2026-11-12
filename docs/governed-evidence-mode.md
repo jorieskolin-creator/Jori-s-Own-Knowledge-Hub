@@ -53,7 +53,7 @@ Each released Evidence Package preserves its existing `schema_version: 1`, `sour
 ## Controlled acceptance test before the Master Table is complete
 
 1. Connect **only** the new Governed Evidence Private MCP in a fresh session. Confirm the tool list has **seven** operations and no full-document reader.
-2. Find the source ID using `search_documents` or `discover_sources`. An incomplete Master Table is acceptable because explicit-ID retrieval does not require its summaries.
+2. Find the source ID using `search_documents` or `discover_sources`. A Master Table with Approved entries for the selected source IDs must first be published. Unapproved and unindexed sources cannot be retrieved, even by exact ID.
 3. Use `retrieve_evidence` on the exact document ID with an architectural question whose correct passages you already know.
 4. Check the returned `governed_mode`, `delivery_status`, Evidence Package version, source SHA-256, passage SHA-256, passage locations and warnings.
 5. Answer using **only the released passages**. If the packet is bounded or incomplete, issue another **targeted `retrieve_evidence` call** using the same governed connection. No `get_document` fallback exists.
@@ -69,7 +69,7 @@ Each released Evidence Package preserves its existing `schema_version: 1`, `sour
 
 - The lightweight extractor remains lexical. A relevant passage phrased with different vocabulary can be missed; **do not infer absence**.
 - Packet output is bounded. A `WARN` may mean that more targeted evidence acquisition is needed.
-- The Master Table is optional for explicit-ID retrieval but useful for automatic topic discovery.
+- The last published Master Table is mandatory for all retrieval: only unchanged Approved records may enter Evidence Packages.
 - No background model-evaluation process is introduced here. The consumer remains responsible for grounded reasoning and source-correct citation.
 - The existing standard MCP endpoints deliberately retain direct reading. Use an isolated governed connection when the outcome must be attributable exclusively to Evidence Packages.
 - Before publishing these changes, run tests, inspect the Private OAuth consent and audience, and perform a live positive and negative retrieval in the preview environment.
@@ -87,11 +87,21 @@ This is a third governed MCP endpoint, added without replacing the existing Publ
 - The unified service requires successful inventory access to **both** Blob stores. It never treats a failed Private inventory as a Public-only success.
 - All discovered and retrieved source objects retain their `public:` or `private:` source IDs and `access` classification.
 - `retrieve_evidence` accepts up to four explicit source IDs in **any authorized mixture of Public and Private** and combines them into one versioned Evidence Package. Every passage maintains the correct original-byte SHA-256, passage SHA-256, section/page and source identifier.
-- `discover_sources` ranks current candidates from both collections using the existing Master Table and metadata fallback. It deliberately reports `discovery_complete: false` because lexical ranking cannot certify recall. `retrieve_topic_evidence` acquires from at most four best-ranked authorized candidates, reports other candidates unexamined and preserves warnings.
+- `discover_sources` ranks current candidates from both collections using Approved records in the last published Master Table, with no Draft or unindexed fallback. It deliberately reports `discovery_complete: false` because lexical ranking cannot certify recall. `retrieve_topic_evidence` acquires from at most four best-ranked authorized candidates, reports other candidates unexamined and preserves warnings.
 - Direct document-reading and raw URLs are unavailable. The endpoint exposes the seven governed tools only.
 - A dedicated OAuth access-token audience ensures that its token **cannot access** the legacy unrestricted Private MCP or Private-only governed MCP. Those endpoints' tokens do not authorize unified access.
 - Successful integrity checks are not assertions of factual truth, policy compliance, privacy clearance, complete semantic recall or verified absence.
 
-**Initial acceptance, even with the Master Table incomplete:** connect only the new Unified endpoint, search for a known Public and a known Private document, then run `retrieve_evidence` using both exact IDs and a shared query. Confirm two distinct sources, source-specific SHA-256 hashes, passage locators and the governing retrieval quality. Repeat with a nonsense query: expect `NO_SUPPORTING_EVIDENCE`, no passages, and `verified_absence: false`. Confirm calls to `get_document` and `search_content` are rejected.
+**Initial acceptance, after approving at least one Public and one Private source in the published Master Table:** connect only the new Unified endpoint, search for those two Approved documents, then run `retrieve_evidence` using both exact IDs and a shared query. Confirm two distinct sources, source-specific SHA-256 hashes, passage locators and the governing retrieval quality. Repeat with a nonsense query: expect `NO_SUPPORTING_EVIDENCE`, no passages, and `verified_absence: false`. Confirm calls to `get_document` and `search_content` are rejected.
 
 **Deployment note:** these endpoints and OAuth routes become available only after the feature branch is merged and deployed. GitHub automated tests and a successful build do not replace a live OAuth and Public/Private Blob acceptance test.
+
+## Approved-only source policy (2026-11-12)
+
+All standard and governed MCP variants now require each source to have **document status Approved in the most recently approved Master Table snapshot**. This applies to listing, metadata search, direct document reading, structure inspection, content search, direct-ID evidence retrieval, automatic topic discovery and coverage verification. Both Public and Private sources are checked against their original scope, availability, changed-source flag and metadata version signature.
+
+There is **no normal MCP bypass** for Draft, Obsolete or unindexed files, even if the caller knows the exact source ID. Those files remain stored for the owner's administrative historical review. Source metadata and Evidence Package byte hashes serve different purposes: the metadata signature binds approval to a source version; original-source SHA-256 in the returned Evidence Package proves what bytes were processed by acquisition. Retrieval integrity is still not a semantic or privacy clearance.
+
+**Operational order:** prepare the document metadata using administrative workflows; set each intended source to **Approved**; select **Save & approve Master Table**; connect an MCP consumer. Saving a single record only stages changes and does not grant evidence eligibility. Until that publication, the last published approval snapshot remains in force.
+
+For initial Master Table population, source files can be handled in the web/document-administration workflow without enabling them as AI evidence sources. The existing general-purpose MCP connection no longer reads Draft/Obsolete sources for preparatory summaries. A separate authenticated authoring connector would be a future optional capability rather than an exception to the normal evidence contract.

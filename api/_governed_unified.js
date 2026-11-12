@@ -7,6 +7,7 @@ const {validateRequest,assembleEvidence,MODES}=require('./_evidence_package');
 const {discover}=require('./_master_discovery');
 const {readMaster}=require('./_master_table');
 const governed=require('./_governed_evidence');
+const approval=require('./_approved_sources');
 
 const CATS={
  '01-solutions':'Solutions','02-frameworks':'Frameworks & Methods',
@@ -63,11 +64,12 @@ function createService(deps={}){
   const [pub,priv]=await Promise.all([enumerate('public'),enumerate('private')]);
   const docs=[...pub,...priv],unique=new Map(docs.map(d=>[d.id,d]));
   if(unique.size!==docs.length)throw Error('Duplicate source identifiers in catalog');
-  return docs;
+  return approval.authorizedCatalog(docs,masterCall);
  }
  async function open(doc){
   if(!doc||!SCOPES.includes(doc.access)||doc.id!==doc.access+':'+doc.pathname||!permitted(doc.pathname))
    throw Error('Invalid source authorization');
+  await approval.requireApprovedSource(doc,masterCall);
   return sourceCall(doc.pathname,{access:doc.access,storeId:stores[doc.access]()});
  }
  function scopedDocuments(ids,docs){
@@ -93,8 +95,8 @@ function createService(deps={}){
   const missing=pub.unindexed_count+priv.unindexed_count;
   const stale=pub.stale_count+priv.stale_count;
   return governed.sanitizedDiscovery({
-   query,scope:'public+private',discovery_method:'master_table_with_metadata_fallback',
-   discovery_complete:false,inventory_documents:docs.length,
+   query,scope:'public+private',discovery_method:'published_approved_sources_only',
+   discovery_complete:false,source_eligibility:'PUBLISHED_APPROVED_ONLY',inventory_documents:docs.length,
    candidates_found:totalFound,candidates_returned:returned.length,
    candidates_truncated:totalFound>limit||pub.candidates_truncated||priv.candidates_truncated,
    public_candidates:pub.candidates_found,private_candidates:priv.candidates_found,

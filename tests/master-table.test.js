@@ -45,20 +45,22 @@ test('Discovery matches full summaries and key terms, not only filenames',async(
   key_terms:['control effectiveness','AI governance'],themes:['solution assurance']};
  const result=await discover('control effectiveness','private',[d],12,[entry]);
  assert.equal(result.candidates_found,1);
- assert.equal(result.candidates[0].source_kind,'master_table');
+ assert.equal(result.candidates[0].source_kind,'approved_master_table');
  assert.equal(result.candidates[0].summary_available,true);
  assert.equal(result.unindexed_count,0);
 });
-test('Discovery reports metadata fallback for documents missing from Master Table',async()=>{
+test('Discovery excludes documents missing from approved Master Table',async()=>{
  const d=doc('public','Risk Assessment');
  const result=await discover('risk assessment','public',[d],12,[]);
  assert.equal(result.unindexed_count,1);
- assert.equal(result.candidates[0].source_kind,'metadata_fallback');
+ assert.equal(result.candidates_found,0);
+ assert.deepEqual(result.candidates,[]);
  assert.equal(result.discovery_complete,false);
 });
 test('Discovery does not expose Private entries on Public endpoint',async()=>{
  const pub=doc('public','Governance'),priv=doc('private','Governance');
- const r=await discover('governance','public',[pub],12,[entryFromDoc(pub),entryFromDoc(priv)]);
+ const r=await discover('governance','public',[pub],12,[{...entryFromDoc(pub),review_status:'Approved'},
+  {...entryFromDoc(priv),review_status:'Approved'}]);
  assert.equal(r.candidates.length,1);
  assert.equal(r.candidates[0].id,pub.id);
  assert.equal(r.master_entries,1);
@@ -66,7 +68,7 @@ test('Discovery does not expose Private entries on Public endpoint',async()=>{
 test('Stale source fingerprints are not used for authoritative Master Table discovery',async()=>{
  const d=doc('public','Governance');
  const edited={...d,updated:'2026-11-12T00:00:00Z'};
- const result=await discover('governance','public',[edited],12,[entryFromDoc(d)]);
+ const result=await discover('governance','public',[edited],12,[{...entryFromDoc(d),review_status:'Approved'}]);
  assert.equal(result.candidates.length,0);
  assert.equal(result.stale_count,1);
 });

@@ -199,7 +199,7 @@ An Admin-maintained Master Table is now part of the application. The separately 
 
 **Source reconciliation:** Existing descriptions persist. Missing Blob sources are marked unavailable for discovery and can be manually removed from the index. Changed-source signatures are flagged for review. Signatures currently represent source ID, upload timestamp and file size rather than a full cryptographic file-content hash.
 
-**MCP integration:** Both Public and Private MCP endpoints now additionally advertise the read-only operations discover_sources and retrieve_topic_evidence. Discovery ranks titles, Master Table summaries, key terms and themes; records without an index entry fall back to metadata. Automatic retrieval selects up to four highest-ranked authorized candidates and invokes the existing evidence package and retrieval quality gates. It reports candidates left unexamined and does not claim verified absence or semantic completeness. Private MCP remains OAuth-protected; Public MCP filters to Public records.
+**MCP integration:** Both Public and Private MCP endpoints now additionally advertise the read-only operations discover_sources and retrieve_topic_evidence. Discovery ranks titles, Master Table summaries, key terms and themes only for Approved records in the last published table; unindexed sources do not enter normal MCP discovery. Automatic retrieval selects up to four highest-ranked authorized candidates and invokes the existing evidence package and retrieval quality gates. It reports candidates left unexamined and does not claim verified absence or semantic completeness. Private MCP remains OAuth-protected; Public MCP filters to Public records.
 
 **Operational limitations:** Initial human-reviewed Master Table not imported yet. Authenticated Admin storage CRUD and live AI enrichment still require acceptance tests in the browser using your authorized session; there is no safe way to perform these production actions without it. The Admin login currently lacks durable brute-force protection; production WAF/rate limiting is recommended. Golden Standards remain deferred.
 
@@ -230,7 +230,7 @@ Public GPT-6.1 Terra enrichment now records text extraction, unassessed visual i
 
 Import safety: human-reviewed JSON (including explicit per-document review statuses) may replace **AI-only** fields, but previously manually saved entries (including deliberately empty entries) are preserved. This lets the completed reviewed HTML catalog supersede auto-generated Public descriptions without overwriting later manual revisions. No external source contents are included in the import, and Private material never enters the Public AI workflow.
 
-MCP discovery uses only the last approved Master Table snapshot and returns review notes (bounded) and separate text/visual extraction status for approved descriptions. Obsolete sources are excluded from default discovery, while Draft descriptions fall back to source title/path metadata rather than being treated as approved. These are catalog qualifications, **not independent evidence or proof of full document comprehension**. Actual findings remain grounded in the original source retrieval and quality gates.
+MCP discovery uses only the last approved Master Table snapshot and returns review notes (bounded) and separate text/visual extraction status for approved descriptions. Obsolete and Draft sources are excluded from normal MCP discovery and evidence retrieval, including explicit IDs. These are catalog qualifications, **not independent evidence or proof of full document comprehension**. Actual findings remain grounded in the original source retrieval and quality gates.
 
 The initial 5-entry HTML remains a review artifact only. The full table will be imported only after the user supplies the complete reviewed HTML and its conversion to the import schema.
 
@@ -268,7 +268,7 @@ Create a custom MCP connection named **Jori's Knowledge Hub — Governed Evidenc
 
 The endpoint advertises seven metadata, discovery and Evidence Package operations. It cannot return full-document contents, raw source URLs, unverified Master Table summaries as factual evidence, or passage text from integrity-BLOCKed packages. The earlier Public-only and Private-only governed endpoints, and ordinary document-reading endpoints, remain supported for their original purposes.
 
-**Acceptance:** In a fresh conversation select only this unified connector, find one Public and one Private source ID, then call `retrieve_evidence` with both IDs. Verify the Evidence Package's per-source original-byte SHA-256, passage SHA-256, locators, status and limitations. Test an unsupported query and attempt `get_document` to confirm no direct reading or false absence. The Master Table need not be complete for explicit-ID tests.
+**Acceptance:** In a fresh conversation select only this unified connector, find one Public and one Private source ID, then call `retrieve_evidence` with both IDs. Verify the Evidence Package's per-source original-byte SHA-256, passage SHA-256, locators, status and limitations. Test an unsupported query and attempt `get_document` to confirm no direct reading or false absence. The Master Table must contain the selected documents as Approved entries in its last published snapshot; it need not be complete for unrelated documents.
 
 See [governed evidence mode](docs/governed-evidence-mode.md) for full setup and test instructions.
 
@@ -280,7 +280,7 @@ The Public and Private standard MCP `get_document` operations now return up to *
 
 **This cap is not used by Evidence Package acquisition:** `retrieve_evidence` and `retrieve_topic_evidence` parse/index the source internally up to their file size, extraction/timeout and retrieval windows, then return selected passages subject to the bounded Evidence Package budgets (focused 10,000; comparative 18,000; comprehensive 28,000 passage characters). Complete source indexing does not guarantee semantic recall or that all matching passages will be returned. `WARN` signals bounded or partial coverage, and `PASS` does not establish factual truth or complete domain evidence.
 
-**Master Table enrichment has a separate processing route:** Public-only, administrator-authorized enrichment extracts source text internally with a 350,000-character model-input budget. It never uses the 120,000-character direct MCP text cap. Private Master Table entries remain manual; when their summaries are authored in ChatGPT using direct document reading, the 120,000-character cap is relevant.
+**Master Table enrichment has a separate processing route:** Public-only, explicitly administrator-authorized enrichment extracts source text internally with a 350,000-character model-input budget. It does not use normal MCP retrieval and remains an administrative authoring operation. Private Master Table entries remain manual; after strict Approved-only enforcement, unapproved Private documents cannot be read through standard MCP for creating their initial summaries.
 
 **PDF direct reading is separate:** it retains a 45,000-character output budget and a maximum of 10 explicitly selected pages per call. Full-document PDF evidence search processes text layers from all available pages under its own 8 MB and time limits, but scanned pages and images are not OCR-interpreted automatically. To summarize longer PDFs, retrieve relevant pages or source passages and explicitly record incomplete coverage.
 
@@ -291,11 +291,34 @@ See `tests/document-text-limit.test.js` and the long-source regression test in `
 **Document status** and **Master Table publication** are independent.
 
 - **Approved (document):** the current document's descriptive entry has been reviewed and may be used for candidate discovery once the Master Table snapshot is published.
-- **Draft (document):** a work-in-progress or unreviewed description. Its unapproved summary, key terms, themes and review notes are **not** used by default MCP discovery. An authorized catalog can still find the source by file title/path metadata.
-- **Obsolete (document):** historical/retired material, still retained in its original Public or Private Blob location and in the Master Table for source-ID-based comparison. It is excluded from default topic discovery once that status is published. Authorized explicit-ID evidence retrieval remains possible; no original document is deleted.
+- **Draft (document):** a work-in-progress or unreviewed description. It is excluded from normal MCP catalog, discovery and evidence retrieval until Approved and included in an approved Master Table publication.
+- **Obsolete (document):** historical/retired material, retained in its original Public or Private Blob location and the administrative Master Table for later review or comparison. Normal MCP retrieval is blocked even by explicit ID; no original document is deleted.
 - **Save entry (stage changes):** persists a working record and sets the whole Master Table to **Draft**. It preserves the last approved discovery snapshot.
 - **Save & approve Master Table:** requires an authenticated administrator action and a current ETag, and atomically snapshots all working records as the published discovery index. The document statuses remain exactly as selected; approving the table does **not** mark every document Approved.
 
 **Storage compatibility:** The existing schema remains v1, with additive `publication` and `published_records` fields. Legacy Master Tables are treated as a last-published snapshot on first read so existing discovery is not inadvertently wiped out when the workflow changes. The index remains in the protected Blob store; access classification of the original sources is unchanged. A newly saved entry, an import, an AI enrichment, a delete or a source inventory reconciliation does not silently approve/publish the working table.
 
-**Important boundary:** This governs **discovery metadata**, not direct access to authorized sources. A source marked Obsolete can still be retrieved by exact ID, and status alone does not establish that its content is true or safe to transmit to a model. Evidence Packages continue to require provenance and retrieval quality gates.
+**Important boundary:** Approval publication controls normal MCP discovery, document reading, content searching and Evidence Package acquisition. Administrator review of historical documents happens outside normal MCP evidence interfaces. Approved status is a human lifecycle decision and does not certify factual correctness or safety for model transfer.
+
+## Approved-only source eligibility for all Knowledge Hub MCP connections
+
+**Rule: Only documents explicitly marked `Approved` in the last published Master Table are eligible for normal MCP source discovery, direct source reading, content search, coverage checks and Evidence Package generation.** This is a deterministic server-side rule, not a ChatGPT prompt instruction.
+
+Eligibility requires all of the following simultaneously:
+
+1. The document ID is present in the **last approved/published Master Table snapshot**, not merely a working edit.
+2. Its `review_status` is exactly `Approved`.
+3. Its source still exists and is available, is in its original Public/Private access scope, is not flagged `source_changed`, and the approved metadata-version signature still matches current Blob inventory metadata.
+4. Source re-authorization occurs immediately before content is opened, preventing status changes between discovery and source extraction from silently bypassing approval.
+
+**Draft**, **Obsolete**, **unindexed**, **missing**, **changed** or **unavailable** sources do not enter ordinary evidence or search. Attempts to retrieve them **by exact source ID** also fail, including `get_document`, `get_document_structure`, `search_content`, `retrieve_evidence`, `verify_coverage`, `retrieve_topic_evidence`, and the unified governed MCP. Previous discovery title/path fallback for unapproved/unindexed documents has been removed.
+
+This applies to all five existing MCP entrypoints: Public, Private, governed Public, governed Private and governed unified Public+Private. The Public+Private combined inventory is filtered using the same published status contract.
+
+**Document preservation and authoring:** Non-Approved source files are **not deleted** or reclassified in Blob. They remain visible to the authenticated administrator in the Master Table editor and can be inspected via the owner's administrative/document-management workflow for drafting, historical comparison, and deliberate re-approval. The normal MCP evidence interfaces do **not** have a historical-review bypass. In particular, if creating new Private Master Table summaries relied on reading Draft documents through standard MCP `get_document`, that direct-reading workflow is now unavailable; use the authorized document-management route or provide source files directly for authoring until a separately scoped administrative-review connector is implemented.
+
+**Publication timing:** Saving the document status `Approved` is not sufficient. After finishing review, the administrator must select **Save & approve Master Table**. Conversely, a working edit marking a previously published Approved source Obsolete does not revoke the prior approved snapshot until the Master Table is published; for urgent revocation, publish the updated table immediately. Source mutation invalidates a previously approved source signature even before the next table publication.
+
+**Safety limitation:** This controls **normal MCP source eligibility**, not what other external websites or separately configured connectors can show. Public Blob files and the ordinary Knowledge Hub website are not made inaccessible by this rule. `Approved` is a human lifecycle decision, not a substitute for recipient-specific data-egress/privacy gates, factual verification, or semantic evidence sufficiency.
+
+Regression coverage: `tests/approved-policy.test.js`, `tests/master-table-lifecycle.test.js`, and `tests/master-table.test.js`.
