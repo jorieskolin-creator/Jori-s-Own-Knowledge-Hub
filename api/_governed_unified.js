@@ -58,6 +58,7 @@ function createService(deps={}){
   return all;
  }
  async function catalog(){
+  if(stores.public()===stores.private())throw Error('Public and Private stores must use distinct identifiers');
   // Both inventories are mandatory: never silently claim unified coverage from one store.
   const [pub,priv]=await Promise.all([enumerate('public'),enumerate('private')]);
   const docs=[...pub,...priv],unique=new Map(docs.map(d=>[d.id,d]));
