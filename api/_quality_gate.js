@@ -9,7 +9,8 @@ function citationValid(p,sources){
  if(typeof p.passage!=='string'||!p.passage.length||!Number.isSafeInteger(p.start)||
     !Number.isSafeInteger(p.end)||p.start<0||p.end-p.start!==p.passage.length)return false;
  if(typeof p.source_verified!=='boolean'||p.source_verified!==true)return false;
- if(!p.source_sha256||p.source_sha256!==sha256(p.id+'|'+(p.page??'')+'|'+(p.section??'')+'|'+p.start+'|'+p.passage))return false;
+ if(!/^[a-f0-9]{64}$/.test(source.original_file_sha256||'')||p.source_sha256!==source.original_file_sha256)return false;
+ if(!p.passage_sha256||p.passage_sha256!==sha256(p.id+'|'+(p.page??'')+'|'+(p.section??'')+'|'+p.start+'|'+p.passage))return false;
  if(source.document_type==='pdf')
   return Number.isInteger(p.page)&&p.page>=1&&p.page<=source.total_pages&&
     (p.section===null||p.section===undefined)&&!source.ocr_required_pages.includes(p.page);
@@ -34,6 +35,7 @@ function evaluateRetrieval(packageData){
  if(new Set(sources.map(s=>s.id)).size!==sources.length||
     sources.some(s=>!requested.includes(s.id))||failures.some(f=>!requested.includes(f.id)))
   reasons.push('SOURCE_SCOPE_MISMATCH');
+ if(sources.some(s=>!/^[a-f0-9]{64}$/.test(s.original_file_sha256||'')))reasons.push('INVALID_ORIGINAL_SOURCE_HASH');
  if(passages.some(p=>!citationValid(p,sources)))reasons.push('INVALID_PASSAGE_PROVENANCE');
  if(passages.length!==packageData.passages_returned)reasons.push('PASSAGE_COUNT_MISMATCH');
  const invalidCoverage=sources.some(s=>{
@@ -57,6 +59,7 @@ function evaluateRetrieval(packageData){
    source_scope:reasons.some(x=>x.includes('SCOPE')||x.includes('COUNT')||x==='UNEXAMINED_SOURCE')?'FAIL':'PASS',
    extraction:sources.some(s=>!s.extraction_complete)?'PARTIAL':reasons.length?'FAIL':'PASS',
    passage_provenance:reasons.includes('INVALID_PASSAGE_PROVENANCE')?'FAIL':'PASS',
+   original_source_hash:reasons.includes('INVALID_ORIGINAL_SOURCE_HASH')?'FAIL':'PASS',
    bounded_output:packageData.package_truncated?'WARN':'PASS',
    relevance_completeness:'NOT_VERIFIED'
   },
@@ -64,6 +67,6 @@ function evaluateRetrieval(packageData){
   authority:'retrieval_integrity_only',
   evidence_sufficiency:'NOT_ASSESSED',
   verified_absence:false,
-  notes:'PASS means only that the selected sources were processed and returned passages passed structural integrity checks; it is not a domain assessment, legal assurance, semantic recall guarantee, or verification of absent evidence.'};
+  notes:'PASS means only that the selected sources were processed and returned passages passed structural integrity checks; it is not a domain assessment, legal assurance, semantic recall guarantee, or verification of absent evidence. The source SHA-256 covers original document bytes; the passage SHA-256 covers the selected locator and text.'};
 }
 module.exports={evaluateRetrieval,citationValid,sha256,POLICY_VERSION};
