@@ -2,7 +2,7 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const {entryFromDoc,normalizeEdit,descriptionHealth,sourceSignature,reconcile,words}=require('../api/_master_table');
+const {entryFromDoc,normalizeEdit,descriptionHealth,sourceSignature,reconcile,words,inspectSourceLinks}=require('../api/_master_table');
 const {discover}=require('../api/_master_discovery');
 const {extractPublic}=require('../api/_master_enrich');
 function doc(scope,name,updated='2026-11-11T00:00:00Z'){
@@ -214,4 +214,27 @@ test('Reviewed JSON import preserves manual entries and supersedes AI-only field
  assert.equal(table.records[0].review_status,'Approved');
  assert.equal(table.records[1].summary,'');
  assert.equal(table.records[2].review_status,'Approved');
+});
+
+test('Verified links bind source ID and metadata version, not ambiguous titles',()=>{
+ const a=entryFromDoc(doc('private','Architecture')),b=entryFromDoc(doc('private','Verification'));
+ const edited=normalizeEdit(a,{related_source_ids:[b.id]},{records:[a,b]});
+ assert.deepEqual(edited.related_source_refs,[{id:b.id,source_signature:b.source_signature}]);
+ assert.equal(inspectSourceLinks(edited,[a,b])[0].status,'CURRENT');
+ const changed={...b,source_signature:'f'.repeat(64)};
+ assert.equal(inspectSourceLinks(edited,[a,changed])[0].status,'STALE_VERSION');
+ assert.equal(inspectSourceLinks(edited,[a])[0].status,'MISSING');
+ assert.equal(inspectSourceLinks(edited,[a,{...b,source_available:false}])[0].status,'UNAVAILABLE');
+});
+test('Verified links reject missing, duplicate, self, stale and unauthorized cross-scope IDs',()=>{
+ const a=entryFromDoc(doc('public','Public')),b=entryFromDoc(doc('private','Private'));
+ const c=entryFromDoc(doc('public','Public Other'));
+ const records=[a,b,c];
+ for(const invalid of [[a.id],[c.id,c.id],['missing'],[b.id]]){
+  assert.throws(()=>normalizeEdit(a,{related_source_ids:invalid},{records}),/Invalid related source ID/);
+ }
+ assert.throws(()=>normalizeEdit(a,{related_source_ids:[c.id]}),/Invalid related source inventory/);
+ assert.throws(()=>normalizeEdit(a,{related_source_ids:[c.id]},{records:[a,b,{...c,source_changed:true}]}),/Invalid related source ID/);
+ const privateLink=normalizeEdit(b,{related_source_ids:[a.id]},{records});
+ assert.equal(privateLink.related_source_refs[0].id,a.id);
 });
