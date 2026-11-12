@@ -19,7 +19,11 @@ test('Complete selected-scope source passages pass integrity gate without assert
  assert.equal(result.retrieval_quality.evidence_sufficiency,'NOT_ASSESSED');
  assert.equal(result.retrieval_quality.verified_absence,false);
  assert.equal(result.passages[0].source_verified,true);
- assert.equal(result.passages[0].source_sha256,sha256(id+'||1|'+result.passages[0].start+'|'+result.passages[0].passage));
+ assert.equal(result.source_coverage[0].original_file_sha256,
+   sha256('<h1>Architecture</h1><p>Evidence acquisition validates source references and coverage.</p>'));
+ assert.equal(result.passages[0].source_sha256,result.source_coverage[0].original_file_sha256);
+ assert.equal(result.passages[0].passage_sha256,
+   sha256(id+'||1|'+result.passages[0].start+'|'+result.passages[0].passage));
 });
 test('No lexical matches returns WARN and does not verify absence',async()=>{
  const id='private:test.html';
@@ -48,6 +52,8 @@ test('Tampered passage content or source path fails provenance validation',async
  const q=evaluateRetrieval(r);
  assert.equal(q.status,'BLOCK');
  assert.ok(q.blocking_reasons.includes('INVALID_PASSAGE_PROVENANCE'));
+ r.passages[0].source_sha256='0'.repeat(64);
+ assert.equal(evaluateRetrieval(r).status,'BLOCK');
  r.passages[0].pathname='different.html';
  assert.equal(evaluateRetrieval(r).status,'BLOCK');
 });
@@ -58,4 +64,14 @@ test('Exhausted response budget returns WARN for omitted matches',async()=>{
  assert.equal(r.retrieval_quality.status,'WARN');
  assert.ok(r.retrieval_quality.warnings.includes('BOUNDED_RESULTS'));
  assert.equal(r.retrieval_quality.verified_absence,false);
+});
+
+test('Document hash cannot be replaced with the passage digest',async()=>{
+ const id='private:test.html';
+ const r=await assembleEvidence({query:'evidence acquisition',ids:[id]},[make(id)],
+   fixture('<h1>Architecture</h1><p>Evidence acquisition confirms the source.</p>'));
+ assert.equal(r.retrieval_quality.status,'PASS');
+ assert.notEqual(r.passages[0].passage_sha256,r.source_coverage[0].original_file_sha256);
+ r.source_coverage[0].original_file_sha256=r.passages[0].passage_sha256;
+ assert.equal(evaluateRetrieval(r).status,'BLOCK');
 });
