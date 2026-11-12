@@ -95,8 +95,8 @@ function createService(deps={}){
   const missing=pub.unindexed_count+priv.unindexed_count;
   const stale=pub.stale_count+priv.stale_count;
   return governed.sanitizedDiscovery({
-   query,scope:'public+private',discovery_method:'master_table_with_metadata_fallback',
-   discovery_complete:false,inventory_documents:docs.length,
+   query,scope:'public+private',discovery_method:'published_approved_sources_only',
+   discovery_complete:false,source_eligibility:'PUBLISHED_APPROVED_ONLY',inventory_documents:docs.length,
    candidates_found:totalFound,candidates_returned:returned.length,
    candidates_truncated:totalFound>limit||pub.candidates_truncated||priv.candidates_truncated,
    public_candidates:pub.candidates_found,private_candidates:priv.candidates_found,
