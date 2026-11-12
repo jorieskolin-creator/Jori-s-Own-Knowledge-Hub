@@ -220,12 +220,12 @@ module.exports=async function(req,res,options={}){
  if(data.method==='notifications/initialized'){res.statusCode=202;return res.end()}
  if(data.jsonrpc!=='2.0'||!Object.prototype.hasOwnProperty.call(data,'id'))return send(res,400,{error:'Invalid JSON-RPC envelope'});
  try{
-  if(data.method==='initialize')return send(res,200,rpc(data.id,{result:{protocolVersion:VERSION,capabilities:{tools:{listChanged:false}},serverInfo:{name:'jori-knowledge-hub-private',version:'0.1.0'}}}));
+  if(data.method==='initialize')return send(res,200,rpc(data.id,{result:{protocolVersion:VERSION,capabilities:{tools:{listChanged:false}},serverInfo:{name:governedMode?'jori-knowledge-hub-governed-private':'jori-knowledge-hub-private',version:'0.1.0'}}}));
   if(data.method==='ping')return send(res,200,rpc(data.id,{result:{}}));
   if(data.method==='tools/list')return send(res,200,rpc(data.id,{result:{tools:governedMode?governed.advertised(TOOLS):TOOLS}}));
   if(data.method==='tools/call'){
-   if(!OAuth.authorized(req)){
-    const challenge='Bearer resource_metadata="'+OAuth.BASE+'/.well-known/oauth-protected-resource", error="invalid_token", error_description="Authorize Knowledge Hub Private to read protected documents"';
+   if(!OAuth.authorized(req,governedMode?OAuth.GOVERNED_RESOURCE:OAuth.RESOURCE)){
+    const challenge='Bearer resource_metadata="'+OAuth.BASE+'/.well-known/oauth-protected-resource'+(governedMode?'/api/mcp-governed-private':'')+'", error="invalid_token", error_description="Authorize Knowledge Hub Private to read protected documents"';
     res.setHeader('WWW-Authenticate',challenge);
     return send(res,200,rpc(data.id,{result:{isError:true,content:[{type:'text',text:'Authorization required'}],_meta:{'mcp/www_authenticate':[challenge]}}}));
    }
