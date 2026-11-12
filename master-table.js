@@ -68,7 +68,10 @@
   const terms=field(host,'Key terms (comma separated, 12–25 meaningful terms)',(item.key_terms||[]).join(', '),true);
   const themes=field(host,'Themes (comma separated, target 5–10)',(item.themes||[]).join(', '),true);
   const sections=field(host,'Important sections (one per line)',(item.important_sections||[]).join('\n'),true);
-  const relations=field(host,'Related documents (one per line)',(item.related_documents||[]).join('\n'),true);
+  const relations=field(host,'Related documents (titles, one per line)',(item.related_documents||[]).join('\n'),true);
+   const linkedSources=field(host,'Verified related source IDs (one per line)',(item.related_source_refs||[]).map(r=>r.id).join('\n'),true);
+   if((item.related_source_links||[]).some(r=>r.status!=='CURRENT'))host.append(node('p','One or more source links are stale or unavailable. Recheck the target document and save to rebind.','mt-error'));
+   host.append(node('p','Source IDs are resolved against the live Master Table and pinned to its metadata version fingerprint (not a verified content hash).','mt-small'))
   const notes=field(host,'Review notes — scope, limitations, claims and exceptions',item.review_notes||'',true);
   const textCoverage=choice(host,'Text extraction',item.text_extraction||'NOT_ASSESSED',[
    ['NOT_ASSESSED','Not assessed'],['COMPLETE','Complete'],['PARTIAL','Partial'],['FAILED','Failed']
@@ -88,6 +91,7 @@
    try{
     const changes={title:title.value,document_type:type.value,summary:summary.value,key_terms:values(terms.value),
      themes:values(themes.value),important_sections:values(sections.value),related_documents:values(relations.value),
+      related_source_ids:linkedSources.value.split(/\r?\n/).map(v=>v.trim()).filter(Boolean),
      review_notes:notes.value,text_extraction:textCoverage.value,visual_inspection:visualCoverage.value,
      review_version:version.value};
     const out=await request('save',{id:item.id,expected_etag:state.etag,changes});
