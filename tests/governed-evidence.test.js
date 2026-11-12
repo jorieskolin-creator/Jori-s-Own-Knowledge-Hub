@@ -9,7 +9,7 @@ const publicGoverned=require('../api/mcp-governed');
 const privateMcp=require('../api/mcp-private');
 const privateGoverned=require('../api/mcp-governed-private');
 const {assembleEvidence}=require('../api/_evidence_package');
-const {releasePackage,releaseTopic,sanitizedDiscovery}=require('../api/_governed_evidence');
+const {releasePackage,releaseTopic,sanitizedDiscovery,catalogEntry}=require('../api/_governed_evidence');
 function response(){
  return {statusCode:200,headers:{},text:'',
   setHeader(k,v){this.headers[k.toLowerCase()]=v;return this},
@@ -125,4 +125,15 @@ test('Discovery metadata cannot leak review notes as unapproved answer evidence'
    evidence:null});
  assert.equal(topic.evidence,null);
  assert.equal(JSON.stringify(topic).includes('Unapproved'),false);
+});
+
+test('Governed catalog metadata never includes direct Blob URL even for Public sources',()=>{
+ const record={id:'public:02-frameworks/a.html',title:'A',access:'public',pathname:'02-frameworks/a.html',
+  source_url:'https://public.blob.vercel-storage.com/secret.html',url:'https://other.example/secret',
+  description:'unreviewed prose',category:'Frameworks'};
+ const clean=catalogEntry(record);
+ assert.equal(clean.source_url,undefined);
+ assert.equal(clean.url,undefined);
+ assert.equal(clean.description,undefined);
+ assert.equal(clean.id,record.id);
 });
