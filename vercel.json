@@ -10,6 +10,10 @@
       "destination": "/api/oauth?route=resource"
     },
     {
+      "source": "/.well-known/oauth-protected-resource/api/mcp-governed-private",
+      "destination": "/api/oauth?route=resource-governed"
+    },
+    {
       "source": "/.well-known/oauth-authorization-server",
       "destination": "/api/oauth?route=metadata"
     },
