@@ -3,16 +3,21 @@
 const {Readable}=require('node:stream');
 const {createHash}=require('node:crypto');
 const {pdfText}=require('./_pdf');
+const {RequestInputError}=require('./_request_errors');
 const MAX_HTML_BYTES=6*1024*1024;
 const MAX_RESULTS=20;
 const MAX_DOCUMENTS=4;
+const MAX_QUERY_LENGTH=200;
+const MAX_QUERY_TERMS=20;
 const WINDOW=1800,OVERLAP=240,MAX_PASSAGE=900;
 function termsOf(query){
- if(typeof query!=='string'||query.trim().length<2||query.length>200)
-  throw new RangeError('Query must be 2-200 characters');
+ if(typeof query!=='string'||query.trim().length<2||query.length>MAX_QUERY_LENGTH)
+  throw new RequestInputError('QUERY_LENGTH',`Query must be a string of 2–${MAX_QUERY_LENGTH} characters.`);
  const tokens=Array.from(query.toLocaleLowerCase('en').matchAll(/[\p{L}\p{N}][\p{L}\p{N}_-]*/gu),m=>m[0]);
  const terms=[...new Set(tokens.filter(t=>t.length>1))];
- if(!terms.length||terms.length>20)throw new RangeError('Query must have 1-20 searchable terms');
+ if(!terms.length)throw new RequestInputError('QUERY_NO_TERMS','Query must contain at least one searchable term of two or more characters.');
+ if(terms.length>MAX_QUERY_TERMS)
+  throw new RequestInputError('QUERY_TOO_MANY_TERMS',`Query exceeds ${MAX_QUERY_TERMS} distinct searchable terms. Shorten it to the key search terms.`);
  return terms;
 }
 function plainHtml(s){
@@ -112,4 +117,4 @@ async function searchFile(file,mime,query,limit,timeoutMs){
  const index=mime==='application/pdf'?await pdfSegments(file,timeoutMs):await htmlSegments(file);
  return {...searchSegments(index.segments,query,limit),coverage:index.coverage};
 }
-module.exports={searchFile,searchSegments,pdfSegments,htmlSegments,termsOf,windows,MAX_RESULTS,MAX_DOCUMENTS};
+module.exports={searchFile,searchSegments,pdfSegments,htmlSegments,termsOf,windows,MAX_RESULTS,MAX_DOCUMENTS,MAX_QUERY_LENGTH,MAX_QUERY_TERMS};
