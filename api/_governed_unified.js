@@ -2,8 +2,9 @@
 // Governed unified Public + Private evidence service. All retrieval is deterministic,
 // scoped to current inventory and independently gated before returned text is released.
 const {list,get}=require('@vercel/blob');
-const {termsOf}=require('./_content_search');
-const {validateRequest,assembleEvidence,MODES}=require('./_evidence_package');
+const {termsOf,MAX_QUERY_LENGTH}=require('./_content_search');
+const {validateRequest,validateMode,assembleEvidence}=require('./_evidence_package');
+const {RequestInputError,SourceAccessError}=require('./_request_errors');
 const {discover}=require('./_master_discovery');
 const {readMaster}=require('./_master_table');
 const governed=require('./_governed_evidence');
@@ -20,6 +21,10 @@ const GROUPS={
  'solution-assurance-concept':'Solution Assurance Concept'
 };
 const SCOPES=['public','private'];
+function validateLimit(limit,maximum){
+ if(!Number.isInteger(limit)||limit<1||limit>maximum)
+  throw new RequestInputError('LIMIT_RANGE',`Limit must be an integer from 1 to ${maximum}.`);
+}
 const stores={
  public:()=>process.env.PUBLIC_BLOB_STORE_ID||process.env.BLOB_STORE_ID||'store_6mg9Vu2ypJJMAwV3',
  private:()=>process.env.PRIVATE_BLOB_STORE_ID||'store_YAAwH6FewcrImhA1'
@@ -75,14 +80,15 @@ function createService(deps={}){
  function scopedDocuments(ids,docs){
   const indexed=new Map(docs.map(d=>[d.id,d]));
   if(ids.some(id=>typeof id!=='string'||!(/^(?:public|private):/).test(id)||
-     !permitted(id.slice(id.indexOf(':')+1))))throw Error('Invalid source ID or path');
+     !permitted(id.slice(id.indexOf(':')+1))))throw new SourceAccessError('Invalid source ID or path');
   const selected=ids.map(id=>indexed.get(id));
-  if(selected.some(d=>!d))throw Error('Source ID outside current authorized catalog');
+  if(selected.some(d=>!d))throw new SourceAccessError('Source ID outside current authorized catalog');
   return selected;
  }
  async function locate(query,docs,limit=12){
   termsOf(query);
-  if(!Number.isInteger(limit)||limit<1||limit>30)throw Error('Invalid candidate limit');
+  validateLimit(limit,30);
+  docs=docs??await catalog();
   const raw=await masterCall();
   const records=raw?.table?.published_records||raw?.published_records||raw?.table?.records||raw?.records;
   if(!Array.isArray(records))throw Error('Master Table inventory unavailable');
@@ -127,8 +133,7 @@ function createService(deps={}){
  }
  async function topic(args){
   termsOf(args?.query);
-  const mode=args.mode??'focused';
-  if(!Object.prototype.hasOwnProperty.call(MODES,mode))throw Error('Invalid retrieval mode');
+  const mode=validateMode(args.mode??undefined);
   const docs=await catalog();
   const found=await locate(args.query,docs,30);
   const ids=found.candidates.slice(0,4).map(d=>d.id);
@@ -147,13 +152,12 @@ function createService(deps={}){
   if(name==='retrieve_topic_evidence')return topic(args);
   if(name==='verify_coverage')return verify(args);
   if(name==='discover_sources'){
-   const query=args.query,limit=args.limit===undefined?12:args.limit;
-   return locate(query,await catalog(),limit);
+   return locate(args.query,undefined,args.limit);
   }
-  const docs=await catalog();
   if(name==='list_documents'){
    const limit=args.limit===undefined?100:args.limit;
-   if(!Number.isInteger(limit)||limit<1||limit>100)throw Error('Invalid catalog limit');
+   validateLimit(limit,100);
+   const docs=await catalog();
    const filtered=docs.filter(d=>(!args.category||d.category===args.category||
     d.pathname.startsWith(args.category+'/'))&&(!args.subfolder||d.subfolder===args.subfolder));
    return {documents:filtered.slice(0,limit).map(governed.catalogEntry),
@@ -162,15 +166,17 @@ function createService(deps={}){
   }
   if(name==='search_documents'){
    const query=String(args.query||'').trim().toLowerCase();
-   if(!query||query.length>200)throw Error('Invalid metadata query');
+   if(!query||query.length>MAX_QUERY_LENGTH)
+    throw new RequestInputError('QUERY_LENGTH',`Metadata query must contain 1–${MAX_QUERY_LENGTH} characters.`);
    const limit=args.limit===undefined?20:args.limit;
-   if(!Number.isInteger(limit)||limit<1||limit>50)throw Error('Invalid search limit');
+   validateLimit(limit,50);
+   const docs=await catalog();
    const hits=docs.filter(d=>[d.title,d.category,d.pathname,d.display_group].join(' ').toLowerCase().includes(query));
    return {documents:hits.slice(0,limit).map(governed.catalogEntry),
     total:hits.length,search_scope:'public+private_metadata',truncated:hits.length>limit};
   }
   if(name==='get_document_metadata'){
-   const result=scopedDocuments([args.id],docs)[0];
+   const result=scopedDocuments([args.id],await catalog())[0];
    return governed.catalogEntry(result);
   }
   throw Error('Unknown operation');

@@ -2,21 +2,29 @@
 // Read-only, deterministic evidence packaging. This is retrieval, not factual verification.
 const {pdfSegments,htmlSegments,searchSegments,termsOf,MAX_DOCUMENTS}=require('./_content_search');
 const {evaluateRetrieval,sha256}=require('./_quality_gate');
+const {RequestInputError}=require('./_request_errors');
 const MODES=Object.freeze({
  focused:{max_passages:6,per_source:3,max_characters:10000,context:300},
  comparative:{max_passages:10,per_source:4,max_characters:18000,context:400},
  comprehensive:{max_passages:16,per_source:6,max_characters:28000,context:550}
 });
 const TIME_BUDGET_MS=24000;
+function validateMode(mode='focused'){
+ if(typeof mode!=='string'||!Object.prototype.hasOwnProperty.call(MODES,mode))
+  throw new RequestInputError('RETRIEVAL_MODE',`Mode must be one of: ${Object.keys(MODES).join(', ')}.`);
+ return mode;
+}
 function validateRequest(args){
- if(!args||typeof args!=='object')throw Error('Invalid request');
+ if(!args||typeof args!=='object')throw new RequestInputError('ARGUMENTS_TYPE','Tool arguments must be a JSON object.');
  termsOf(args.query);
  const ids=args.ids;
- if(!Array.isArray(ids)||ids.length===0||ids.length>MAX_DOCUMENTS||new Set(ids).size!==ids.length||
-    ids.some(x=>typeof x!=='string'))throw Error('Specify 1-4 distinct document identifiers');
- const mode=args.mode===undefined?'focused':args.mode;
- if(!Object.prototype.hasOwnProperty.call(MODES,mode))throw Error('Invalid retrieval mode');
- return {query:args.query,ids,mode};
+ if(!Array.isArray(ids)||ids.length===0||ids.length>MAX_DOCUMENTS)
+  throw new RequestInputError('SOURCE_ID_COUNT',`Supply an array of 1–${MAX_DOCUMENTS} source IDs.`);
+ if(ids.some(id=>typeof id!=='string'))
+  throw new RequestInputError('SOURCE_ID_TYPE','Each source ID must be a string.');
+ if(new Set(ids).size!==ids.length)
+  throw new RequestInputError('DUPLICATE_SOURCE_IDS','Supply distinct source IDs. Remove duplicate IDs and retry.');
+ return {query:args.query,ids,mode:validateMode(args.mode)};
 }
 function orderMatches(a,b){
  return b.score-a.score||a.source_order-b.source_order||
@@ -138,4 +146,4 @@ async function assembleEvidence(args,docs,openFile){
  result.retrieval_quality=evaluateRetrieval(result);
  return result;
 }
-module.exports={assembleEvidence,validateRequest,MODES,pick,expand};
+module.exports={assembleEvidence,validateRequest,validateMode,MODES,pick,expand};

@@ -139,6 +139,32 @@ test('Unified tool list exposes exactly seven governed operations, no raw readin
  assert.ok(!names.includes('search_content'));
  assert.ok(!names.includes('get_document_structure'));
  assert.ok(resp.body.result.tools.every(t=>t.securitySchemes?.[0]?.type==='oauth2'));
+ const discovery=resp.body.result.tools.find(t=>t.name==='discover_sources');
+ assert.match(discovery.inputSchema.properties.query.description,/20 distinct searchable terms/);
+});
+test('Unified endpoint reports the violated input rule before accessing storage',async()=>{
+ const login=bearer(OAuth.UNIFIED_RESOURCE);
+ const cases=[
+  ['discover_sources',{query:'a'.repeat(201)},'QUERY_LENGTH',/2–200 characters/],
+  ['discover_sources',{query:'!? '},'QUERY_NO_TERMS',/at least one searchable term/],
+  ['discover_sources',{query:Array.from({length:21},(_,i)=>'term'+i).join(' ')},
+   'QUERY_TOO_MANY_TERMS',/20 distinct searchable terms/],
+  ['discover_sources',{query:'governance',limit:31},'LIMIT_RANGE',/1 to 30/],
+  ['retrieve_evidence',{query:'governance',ids:[]},'SOURCE_ID_COUNT',/1–4 source IDs/],
+  ['retrieve_evidence',{query:'governance',ids:[1]},'SOURCE_ID_TYPE',/must be a string/],
+  ['retrieve_evidence',{query:'governance',ids:[privateId,privateId]},'DUPLICATE_SOURCE_IDS',/Remove duplicate IDs/],
+  ['retrieve_topic_evidence',{query:'governance',mode:'secret-mode'},'RETRIEVAL_MODE',/focused, comparative, comprehensive/]
+ ];
+ for(const [name,args,reason,message] of cases){
+  const {body}=await rpc(handler,'tools/call',{name,arguments:args},login);
+  const result=body.result;
+  assert.equal(result.isError,true);
+  assert.equal(result.structuredContent.error_code,'INVALID_ARGUMENT');
+  assert.equal(result.structuredContent.reason,reason);
+  assert.match(result.content[0].text,message);
+  assert.equal(result.structuredContent.message,result.content[0].text);
+  assert.doesNotMatch(JSON.stringify(result),/secret-mode|private:|term20/);
+ }
 });
 test('Unified requests require an exact audience and reject direct-reading tool calls',async()=>{
  const login=bearer(OAuth.UNIFIED_RESOURCE);
