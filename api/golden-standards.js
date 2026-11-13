@@ -8,14 +8,23 @@ const {FIXTURE_PATH,publishedSnapshot,deploymentInfo,runChecks}=require('./_gold
 const REPORT_PATH='_knowledge-system/golden-standard-reports-v1.json';
 const storageOptions=()=>({storeId:STORE_ID(),access:'private'});
 
+const emptyReports=()=>({latest:null,previous_release:null});
 async function readReports(){
  try{
   const file=await get(REPORT_PATH,{...storageOptions(),useCache:false});
-  if(!file)return {latest:null,previous_release:null,etag:null};
-  const reports=await new Response(file.stream).json();
-  return {...reports,etag:file.blob.etag};
+  return file?await new Response(file.stream).json():emptyReports();
  }catch(e){
-  if(e instanceof BlobNotFoundError)return {latest:null,previous_release:null,etag:null};
+  if(e instanceof BlobNotFoundError)return emptyReports();
+  throw e;
+ }
+}
+async function reportWriteVersion(){
+ try{
+  const metadata=await head(REPORT_PATH,{storeId:STORE_ID()});
+  if(!metadata.etag)throw Error('Missing report version');
+  return metadata.etag;
+ }catch(e){
+  if(e instanceof BlobNotFoundError)return null;
   throw e;
  }
 }
@@ -23,18 +32,20 @@ function releaseOf(deployment){return deployment.commit||deployment.id;}
 async function saveReport(report){
  // Conditional writes preserve the newest completed report across concurrent runs.
  for(let attempt=0;attempt<3;attempt++){
-  const stored=await readReports();
+  const etag=await reportWriteVersion();
+  const stored=etag?await readReports():emptyReports();
+  if(etag&&!stored.latest)continue;
   if(stored.latest&&stored.latest.completed_at>=report.completed_at)return;
   const previous=stored.latest&&releaseOf(stored.latest.deployment)!==releaseOf(report.deployment)
    ?stored.latest:stored.previous_release;
-  const options={...storageOptions(),contentType:'application/json',addRandomSuffix:false};
-  if(stored.etag)Object.assign(options,{allowOverwrite:true,ifMatch:stored.etag});
+  const options={...storageOptions(),contentType:'application/json',addRandomSuffix:false,allowOverwrite:!!etag};
+  if(etag)options.ifMatch=etag;
   try{
    await put(REPORT_PATH,JSON.stringify({latest:report,previous_release:previous}),options);
    return;
   }catch(e){
    if(!(e instanceof BlobPreconditionFailedError)&&
-      !(!stored.etag&&/already exists|already been taken|conflict/i.test(e.message||'')))throw e;
+      !(!etag&&/already exists|already been taken|conflict/i.test(e.message||'')))throw e;
   }
  }
  throw Error('Could not save the report after concurrent changes.');
@@ -80,7 +91,10 @@ module.exports=async function(req,res){
    deployment:deploymentInfo(),published_snapshot:initial,snapshot_changed,
    status:snapshot_changed||cases.some(row=>row.status==='Review')?'Review':'Pass',cases};
   try{await saveReport(report);}
-  catch{return send(res,200,{report,saved:false});}
+  catch(error){
+   console.error('Golden Standards report storage write failed',error?.constructor?.name||'Error');
+   return send(res,200,{report,saved:false});
+  }
   return send(res,200,{report,saved:true});
  }catch{
   return send(res,503,{error:'Golden Standards could not complete. Check connector and Master Table availability.'});
