@@ -1,0 +1,293 @@
+{
+  "suite": "GS-003",
+  "version": 1,
+  "warning_limit": 3,
+  "evidence_integrity": "No failures",
+  "accepted_exceptions": [],
+  "fixture": {
+    "source": "FRAMEWORK",
+    "query": "Generate Ground Govern",
+    "mode": "focused"
+  },
+  "sources": {
+    "FRAMEWORK": "public:02-frameworks/AI Governance_Validation and Steps_30.10.2026.html",
+    "DEMAND": "public:02-frameworks/Shaping Demand_The Idea_4.9.2026.pdf",
+    "FLOW": "public:03-general-presentations/From Signal to Validated Proposal — The Story of Agentic Flow.html",
+    "FLYWHEEL": "public:03-general-presentations/The AI-Driven Value Creation Flywheel · Concept Paper.html",
+    "CONCEPT": "public:02-frameworks/Evolving-Modernization-The-Concept.html",
+    "LANDING_ZONE": {
+      "hash": "2966252d1aeeff753fdfff1bb02aa3688cb54a976f30ea833f9e6745347c3369"
+    },
+    "OPERATING_RHYTHM": {
+      "hash": "9187d325e53bcf2da01e9f38aa27a531a85c2f85491dfed2e5cb2df320b87bfb"
+    },
+    "FRONTRUNNERS": {
+      "hash": "ef1371877e2117d4acf3f85db7e84b9c039b37a5ac1d315f0d4fba0de2ce2a88"
+    },
+    "VALUE_STREAM": {
+      "hash": "fa06d62f8647408b727d26c9b20d73bb28ccb34b41753a627a1e8bcfc8813b79"
+    }
+  },
+  "cases": [
+    {
+      "id": "GS-003-01",
+      "title": "Out-of-scope restaurant search",
+      "topic_query": "Helsinki pizza pizzeria opening hours",
+      "expected": {
+        "tool_failures": 0,
+        "max_passages": 0
+      }
+    },
+    {
+      "id": "GS-003-02",
+      "title": "Unverified business claim",
+      "searches": [
+        {
+          "query": "AI Driven Value Creation Flywheel Concept Paper",
+          "expected_sources": [
+            "FLYWHEEL"
+          ]
+        }
+      ],
+      "topic_query": "pizzeria pizzaravintola",
+      "expected": {
+        "tool_failures": 0,
+        "max_passages": 0
+      }
+    },
+    {
+      "id": "GS-003-03",
+      "title": "Generate, Ground and Govern",
+      "searches": [
+        {
+          "query": "Generate Ground Govern alternative design responses",
+          "expected_sources": [
+            "FRAMEWORK"
+          ]
+        }
+      ],
+      "evidence_query": "Generate Ground Govern candidate output retrieved material external system decision alternative design responses acceptance",
+      "mode": "comprehensive",
+      "expected": {
+        "tool_failures": 0,
+        "reference_locations": [
+          {
+            "source": "FRAMEWORK",
+            "sections": [
+              5,
+              30,
+              31,
+              32
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "GS-003-04",
+      "title": "Pilot proposal and case results",
+      "searches": [
+        {
+          "query": "Shaping Demand The Idea 4.9.2026",
+          "expected_sources": [
+            "DEMAND"
+          ]
+        }
+      ],
+      "evidence_query": "2 domains 10 accounts 90 days pilot winning ratio",
+      "mode": "comprehensive",
+      "expected": {
+        "tool_failures": 0,
+        "reference_locations": [
+          {
+            "source": "DEMAND",
+            "pages": [
+              8,
+              10
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "GS-003-05",
+      "title": "Proposal workflow and human approval",
+      "searches": [
+        {
+          "query": "From Signal to Validated Proposal Story of Agentic Flow",
+          "expected_sources": [
+            "FLOW"
+          ]
+        },
+        {
+          "query": "Shaping Demand The Idea 4.9.2026",
+          "expected_sources": [
+            "DEMAND"
+          ]
+        }
+      ],
+      "evidence_query": "six steps agentic workflow sense diagnose simulate propose validate route learn feedback human validation",
+      "mode": "comprehensive",
+      "expected": {
+        "tool_failures": 0,
+        "reference_locations": [
+          {
+            "source": "FLOW",
+            "sections": [
+              4
+            ]
+          },
+          {
+            "source": "DEMAND",
+            "pages": [
+              9
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "GS-003-06",
+      "title": "Contradiction and tested absence",
+      "searches": [
+        {
+          "query": "Evidence Driven Landing Zone Assessment Stakeholder Proposal",
+          "expected_sources": [
+            "LANDING_ZONE"
+          ]
+        }
+      ],
+      "evidence_query": "Deny Audit contradiction workshop silence scoped collector tested absence",
+      "mode": "focused",
+      "expected": {
+        "tool_failures": 0,
+        "reference_locations": [
+          {
+            "source": "LANDING_ZONE",
+            "sections": [
+              19
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "GS-003-07",
+      "title": "Meeting cadences and outputs",
+      "searches": [
+        {
+          "query": "Operating Rhythm Demand Verification Capacity Planning",
+          "expected_sources": [
+            "OPERATING_RHYTHM"
+          ]
+        }
+      ],
+      "evidence_query": "Request Review Demand Verification every Tuesday Business Demand Capacity Planning Every Month outputs",
+      "mode": "comprehensive",
+      "expected": {
+        "tool_failures": 0,
+        "reference_locations": [
+          {
+            "source": "OPERATING_RHYTHM",
+            "pages": [
+              13,
+              17
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "GS-003-08",
+      "title": "Reported results in a longer PDF",
+      "searches": [
+        {
+          "query": "Frontrunners IT consultancy aviation ground services",
+          "expected_sources": [
+            "FRONTRUNNERS"
+          ]
+        }
+      ],
+      "evidence_query": "IT Consultancy Data net profit delivery reliability intervention improvements causal attribution",
+      "mode": "focused",
+      "expected": {
+        "tool_failures": 0,
+        "reference_locations": [
+          {
+            "source": "FRONTRUNNERS",
+            "pages": [
+              27,
+              33
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "GS-003-09",
+      "title": "Onboarding pilot evidence across three sources",
+      "searches": [
+        {
+          "query": "Evolving Modernization The Concept",
+          "expected_sources": [
+            "CONCEPT"
+          ]
+        },
+        {
+          "query": "AI Driven Value Creation Flywheel Concept Paper",
+          "expected_sources": [
+            "FLYWHEEL"
+          ]
+        },
+        {
+          "query": "Value Stream Analysis Process Optimization Service Description",
+          "expected_sources": [
+            "VALUE_STREAM"
+          ]
+        }
+      ],
+      "evidence_query": "standardized maintenance iterative onboarding impact statement vertical slice baseline wait time current state future state backlog",
+      "mode": "comprehensive",
+      "expected": {
+        "tool_failures": 0,
+        "reference_locations": [
+          {
+            "source": "CONCEPT",
+            "sections": [
+              24
+            ]
+          },
+          {
+            "source": "FLYWHEEL",
+            "sections": [
+              10,
+              12
+            ]
+          },
+          {
+            "source": "VALUE_STREAM",
+            "pages": [
+              7,
+              12
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "GS-003-10",
+      "title": "Golden Standard fixture exclusion",
+      "searches": [
+        {
+          "query": "AI Governance Validation and Steps 30.10.2026",
+          "expected_sources": []
+        }
+      ],
+      "expected": {
+        "tool_failures": 0,
+        "max_passages": 0,
+        "fixture_excluded": true
+      }
+    }
+  ]
+}

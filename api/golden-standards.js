@@ -3,7 +3,7 @@ const {get,put,head,BlobNotFoundError,BlobPreconditionFailedError}=require('@ver
 const {send,valid}=require('./_auth');
 const {readMaster,STORE_ID}=require('./_master_table');
 const {createService}=require('./_governed_unified');
-const {FIXTURE_PATH,publishedSnapshot,deploymentInfo,runChecks}=require('./_golden_standard_checks');
+const {FIXTURE_PATH,publishedSnapshot,deploymentInfo,runChecks,compareResults}=require('./_golden_standard_checks');
 
 const REPORT_PATH='_knowledge-system/golden-standard-reports-v1.json';
 const storageOptions=()=>({storeId:STORE_ID(),access:'private'});
@@ -87,9 +87,10 @@ module.exports=async function(req,res){
   const cases=await runChecks({fixturePresent:await probeFixture()});
   const final=publishedSnapshot((await readMaster()).table);
   const snapshot_changed=initial.revision!==final.revision;
+  const comparison=compareResults(cases,snapshot_changed);
   const report={suite:'GS-003',started_at,completed_at:new Date().toISOString(),
    deployment:deploymentInfo(),published_snapshot:initial,snapshot_changed,
-   status:snapshot_changed||cases.some(row=>row.status==='Review')?'Review':'Pass',cases};
+   status:comparison.severity==='ok'?'Pass':'Review',comparison,cases};
   try{await saveReport(report);}
   catch(error){
    console.error('Golden Standards report storage write failed',error?.constructor?.name||'Error');
