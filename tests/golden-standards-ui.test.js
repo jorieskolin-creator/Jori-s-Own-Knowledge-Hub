@@ -20,7 +20,7 @@ test('published snapshot identity ignores working Master Table edits',()=>{
 test('suite reports actual fixture denial and marks unrelated released evidence for review',async()=>{
  const fixture='private:'+FIXTURE_PATH;
  const attempts=[];
- let allowFixture=false;
+ let allowFixture=false,restaurantPassages=4;
  const service={catalog:async()=>[],execute:async(operation,args)=>{
   attempts.push(operation);
   if(operation==='retrieve_evidence'){
@@ -31,7 +31,7 @@ test('suite reports actual fixture denial and marks unrelated released evidence 
   const discovery={candidates:[],candidates_found:0,candidates_returned:0,candidates_truncated:false};
   if(operation==='retrieve_topic_evidence'){
    if(args.query.includes('Helsinki'))return {discovery:{...discovery,candidates_found:1,candidates_returned:1},
-    delivery_status:'RELEASED',evidence:{passages:[{passage:'unrelated text'}]}};
+    delivery_status:'RELEASED',evidence:{passages:Array.from({length:restaurantPassages},()=>({passage:'unrelated text'}))}};
    return {discovery,delivery_status:'NO_SOURCE_CANDIDATES',evidence:null};
   }
   return discovery;
@@ -39,15 +39,26 @@ test('suite reports actual fixture denial and marks unrelated released evidence 
  const cases=await runChecks({service,fixturePresent:true});
  assert.deepEqual(cases.map(row=>row.id),Array.from({length:10},(_,i)=>'GS-003-'+String(i+1).padStart(2,'0')));
  assert.equal(cases[0].status,'Review');
- assert.equal(cases[0].passages_returned,1);
+ assert.equal(cases[0].expected_status,'Review');
+ assert.equal(cases[0].passages_returned,4);
  assert.equal(cases[0].reference_passages,0);
- assert.deepEqual(cases[0].differences.map(({check,expected,actual})=>({check,expected,actual})),
-  [{check:'Evidence passages returned',expected:0,actual:1}]);
+ assert.deepEqual(cases[0].differences,[]);
+ assert.equal(compareResults([cases[0]]).severity,'ok');
+ assert.equal(compareResults([cases[0]]).matched_cases,1);
  assert.equal(cases[9].status,'Pass');
  assert.equal(cases[9].fixture_denied,true);
  assert.equal(cases[9].failures.length,0);
  assert.ok(attempts.includes('retrieve_evidence'));
  assert.doesNotMatch(JSON.stringify(cases),/unrelated text|golden-standard\//);
+ restaurantPassages=5;
+ const changed=(await runChecks({service,fixturePresent:true}))[0];
+ assert.equal(compareResults([changed]).severity,'warning');
+ assert.deepEqual(changed.differences.map(({check,expected,actual})=>({check,expected,actual})),
+  [{check:'Evidence passages returned',expected:4,actual:5}]);
+ restaurantPassages=0;
+ const improved=(await runChecks({service,fixturePresent:true}))[0];
+ assert.equal(improved.status,'Pass');
+ assert.equal(compareResults([improved]).difference_cases,1);
  assert.equal((await runChecks({service,fixturePresent:false}))[9].status,'Review');
  allowFixture=true;
  const exposed=(await runChecks({service,fixturePresent:true}))[9];

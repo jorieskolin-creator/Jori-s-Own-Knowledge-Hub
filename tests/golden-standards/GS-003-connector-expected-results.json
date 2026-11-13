@@ -1,6 +1,6 @@
 {
   "suite": "GS-003",
-  "version": 1,
+  "version": 2,
   "warning_limit": 3,
   "evidence_integrity": "No failures",
   "accepted_exceptions": [],
@@ -34,6 +34,8 @@
       "title": "Out-of-scope restaurant search",
       "topic_query": "Helsinki pizza pizzeria opening hours",
       "expected": {
+        "status": "Review",
+        "baseline_passages": 4,
         "tool_failures": 0,
         "max_passages": 0
       }

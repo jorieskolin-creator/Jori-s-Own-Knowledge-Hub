@@ -44,13 +44,16 @@
   const comparison=report.comparison;
   if(comparison){
    const count=comparison.difference_cases;
-   const caption=(count?' · '+count+(count===1?' difference':' differences'):'')+
+   const caption=' · '+count+(count===1?' difference':' differences')+
     (comparison.accepted_cases?' · 1 known exception':'');
    summary.append(node('span',comparisonLabels[comparison.severity]+caption,'gs-tag gs-tag-'+comparison.severity));
   }else{
    summary.append(node('span',' · '+report.status));
   }
-  summary.append(node('span',' · '+passed+'/'+report.cases.length+' passed · '+date(report.completed_at)));
+  const outcomes=comparison?.matched_cases===undefined?
+   passed+'/'+report.cases.length+' passed':
+   comparison.matched_cases+'/'+report.cases.length+' matched expected results';
+  summary.append(node('span',' · '+outcomes+' · '+date(report.completed_at)));
   details.append(summary);
   if(comparison)details.append(renderComparison(comparison));
   else details.append(node('p','This report predates the versioned comparison.','small'));
@@ -68,7 +71,7 @@
    totals.matched+' distinct reference passages across cases','small'));
   const table=node('table');
   const head=node('tr');
-  for(const label of ['Case','Result','Discovery','Evidence','Details'])head.append(node('th',label));
+  for(const label of ['Case','Expected / Actual','Discovery','Evidence','Details'])head.append(node('th',label));
   const thead=node('thead');
   thead.append(head);
   table.append(thead);
@@ -76,9 +79,11 @@
   for(const row of report.cases){
    const tr=node('tr');
    const summary=[...row.issues,...row.failures.map(f=>f.operation+' · '+f.reason),
+    ...(row.expected_baseline_passages===undefined?[]:['Expected baseline: '+row.expected_baseline_passages+' passages.']),
     ...(row.fixture_denied===true?['Exact-ID retrieval denied.']:[]),
     ...(row.warnings.length?['Warnings: '+row.warnings.join(', ')]:[])];
-   tr.append(node('th',row.id+' · '+row.title),node('td',row.status,row.status==='Pass'?'gs-pass':'gs-review'),
+   const result=row.expected_status?row.expected_status+' / '+row.status:row.status;
+   tr.append(node('th',row.id+' · '+row.title),node('td',result,row.status==='Pass'?'gs-pass':'gs-review'),
     node('td',row.discovery_returned+'/'+row.discovery_found+(row.discovery_truncated?' · capped':'')),
     node('td',row.passages_returned+' passages · '+row.reference_locations_found+'/'+row.reference_locations_expected+
      ' reference locations'+(row.packages_truncated?' · capped':'')),
@@ -119,7 +124,6 @@
    }else{
     reports.append(node('p',data.report_storage_available?'No verification report yet.':'Saved reports are unavailable.','small'));
    }
-   if(data.previous_release)reports.append(renderReport(data.previous_release,'Previous release verification'));
    return true;
   }catch{
    if(current===session)health.textContent='Golden Standards status unavailable.';
@@ -137,7 +141,7 @@
    const refreshed=saved&&await refresh();
    if(current!==session)return;
    if(!refreshed){
-    reports.prepend(renderReport(report,'Current verification'));
+    reports.replaceChildren(renderReport(report,'Current verification'));
    }
    if(reports.firstElementChild?.tagName==='DETAILS')reports.firstElementChild.open=true;
    notice.textContent=saved?'Verification finished.':'Verification finished. The report could not be saved.';

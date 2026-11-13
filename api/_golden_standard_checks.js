@@ -30,10 +30,12 @@ function compareResults(cases,snapshotChanged,exceptions=standard.accepted_excep
   differences.filter(other=>other.case_id===d.case_id).length===1&&
   exceptions.some(e=>['case_id','check','expected','actual'].every(key=>e[key]===d[key])));
  const rows=differences.map(d=>({...d,accepted:d===accepted}));
+ const affectedCases=new Set(rows.map(d=>d.case_id));
  const differenceCases=new Set(rows.filter(d=>!d.accepted).map(d=>d.case_id)).size;
  const severity=rows.some(d=>d.critical)||differenceCases>standard.warning_limit?'severe':
   differenceCases||snapshotChanged?'warning':'ok';
  return {version:standard.version,severity,difference_cases:differenceCases,
+  matched_cases:cases.filter(row=>!affectedCases.has(row.id)).length,
   accepted_cases:Number(!!accepted),differences:rows};
 }
 
@@ -140,14 +142,20 @@ async function runCase(spec,service,catalog,privateIds,fixturePresent){
   const actual=row.fixture_denied===true?'Denied':row.fixture_denied===false?'Accepted':'Unverified';
   compare('Exact-ID fixture retrieval','Denied',actual,row.fixture_denied===false);
  }
- if(expected.max_passages!==undefined&&row.passages_returned>expected.max_passages)
+ const exceedsTarget=expected.max_passages!==undefined&&row.passages_returned>expected.max_passages;
+ if(expected.baseline_passages===undefined&&exceedsTarget)
   compare('Evidence passages returned',expected.max_passages,row.passages_returned,!!expected.fixture_excluded);
  const foundLocations=locations.filter(l=>l.found).length;
  compare('Reference locations found',locations.length,foundLocations);
  compare('Tool-call failures',expected.tool_failures,row.failures.length);
  compare('Evidence integrity',standard.evidence_integrity,row.integrity_blocked?'Failed':'No failures',true);
+ const status=exceedsTarget||row.differences.length?'Review':'Pass';
+ const expected_status=expected.status||'Pass';
+ if(expected.baseline_passages!==undefined)
+  compare('Evidence passages returned',expected.baseline_passages,row.passages_returned);
+ if(!row.differences.length)compare('Case result',expected_status,status);
  const {matchedPassages,warnings,...summary}=row;
- return {...summary,status:row.differences.length?'Review':'Pass',warnings:[...warnings],
+ return {...summary,status,expected_status,expected_baseline_passages:expected.baseline_passages,warnings:[...warnings],
   reference_locations_found:foundLocations,reference_locations_expected:locations.length,
   reference_passages:matchedPassages.size};
 }
