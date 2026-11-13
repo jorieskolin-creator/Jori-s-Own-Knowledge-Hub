@@ -2,6 +2,7 @@
 const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
+const {BlobNotFoundError,BlobPreconditionFailedError}=require('@vercel/blob');
 const master=require('../api/_master_table');
 const {SourceAccessError}=require('../api/_request_errors');
 const {FIXTURE_PATH,publishedSnapshot,runChecks}=require('../api/_golden_standard_checks');
@@ -46,17 +47,32 @@ test('suite reports actual fixture denial and marks unrelated released evidence 
  assert.equal((await runChecks({service,fixturePresent:false}))[9].status,'Review');
 });
 
-test('administrator status is read-only and completed reports retain the previous release',async()=>{
- let stored=null,writes=0,runs=0,deployment='release-a';
+test('report storage uses the metadata ETag, retries conflicts and retains the previous release',async()=>{
+ let stored=null,writes=0,runs=0,deployment='release-a',conflictOnWrite=false,conflicts=0;
  const table=master.approveTable({records:[]},'2026-11-13T10:00:00Z');
  const cases=Array.from({length:10},(_,i)=>({id:'GS-003-'+i,status:'Pass'}));
  const deps={
   '@vercel/blob':{
-   head:async()=>({}),get:async()=>stored?{stream:new Response(JSON.stringify(stored)).body,blob:{etag:'etag'+writes}}:null,
+   BlobNotFoundError,BlobPreconditionFailedError,
+   head:async path=>{
+    if(path===FIXTURE_PATH)return {};
+    if(!stored)throw new BlobNotFoundError();
+    return {etag:'etag'+writes};
+   },
+   get:async(path,options)=>{
+    assert.equal(options.useCache,false);
+    return stored?{stream:new Response(JSON.stringify(stored)).body,blob:{etag:''}}:null;
+   },
    put:async(path,body,options)=>{
     assert.equal(path,'_knowledge-system/golden-standard-reports-v1.json');
     assert.equal(options.access,'private');
+    assert.equal(options.allowOverwrite,!!stored);
     assert.equal(options.ifMatch,stored?'etag'+writes:undefined);
+    if(conflictOnWrite){
+     conflictOnWrite=false;
+     conflicts++;
+     throw new BlobPreconditionFailedError();
+    }
     stored=JSON.parse(body);
     writes++;
    }
@@ -80,14 +96,24 @@ test('administrator status is read-only and completed reports retain the previou
  assert.equal((await call('GET')).payload.latest,null);
  assert.equal(runs,0);
  assert.equal(writes,0);
- assert.equal((await call('POST')).payload.saved,true);
+ const first=(await call('POST')).payload;
+ assert.equal(first.saved,true);
  assert.equal((await call('GET')).payload.latest.deployment.id,'release-a');
+ await new Promise(resolve=>setTimeout(resolve,5));
+ conflictOnWrite=true;
+ const second=(await call('POST')).payload;
+ assert.equal(second.saved,true);
+ assert.notEqual(second.report.completed_at,first.report.completed_at);
+ assert.equal((await call('GET')).payload.latest.completed_at,second.report.completed_at);
+ assert.equal((await call('GET')).payload.previous_release,null);
  deployment='release-b';
  await new Promise(resolve=>setTimeout(resolve,5));
  assert.equal((await call('POST')).payload.saved,true);
  const status=(await call('GET')).payload;
  assert.equal(status.latest.deployment.id,'release-b');
  assert.equal(status.previous_release.deployment.id,'release-a');
- assert.equal(runs,2);
- assert.equal(writes,2);
+ assert.equal(status.previous_release.completed_at,second.report.completed_at);
+ assert.equal(runs,3);
+ assert.equal(writes,3);
+ assert.equal(conflicts,1);
 });
