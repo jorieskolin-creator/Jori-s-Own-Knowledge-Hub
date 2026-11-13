@@ -6,8 +6,8 @@
  style.textContent='#mtDialog{border:1px solid #dbe4eb;border-radius:14px;box-shadow:0 24px 90px #13233e44;padding:0;width:min(1300px,96vw);max-width:none;height:90vh;max-height:95vh;color:#142840}'+
  '#mtDialog::backdrop{background:#10203088}.mt-header,.mt-tools{display:flex;align-items:center;gap:10px;padding:14px 20px;border-bottom:1px solid #e1e8ef;flex-wrap:wrap}'+
  '.mt-header h2{margin:0;flex:1}.mt-tools input{min-width:180px;flex:1}.mt-tools button{font-size:12px}.mt-main{display:grid;grid-template-columns:53% 47%;height:calc(100% - 185px)}'+
- '.mt-list,.mt-editor{overflow:auto;padding:12px}.mt-list{border-right:1px solid #e1e8ef}.mt-list table{width:100%;border-collapse:collapse;font-size:12px}'+
- '.mt-list td,.mt-list th{padding:9px;border-bottom:1px solid #e1e8ef;text-align:left;vertical-align:top}.mt-list tr{cursor:pointer}'+
+ '.mt-list,.mt-editor{overflow:auto;padding:12px}.mt-list{border-right:1px solid #e1e8ef}.mt-list table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:12px}'+
+ '.mt-list td,.mt-list th{padding:9px;border-bottom:1px solid #e1e8ef;text-align:left;vertical-align:top;overflow-wrap:anywhere}.mt-list th:first-child{width:38px}.mt-list th:nth-child(2){width:110px}.mt-list tr{cursor:pointer}'+
  '.mt-list tr:hover,.mt-selected{background:#e7f5ed}.mt-editor label{font-size:12px;font-weight:bold;display:block;margin-top:10px}.mt-editor textarea,.mt-editor input,.mt-editor select{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font:13px system-ui}'+
  '.mt-editor textarea{min-height:90px;resize:vertical}.mt-actions{display:flex;justify-content:flex-end;gap:10px;padding:13px 0}.mt-msg{padding:8px 20px;font-size:12px;color:#475569;min-height:32px}'+
  '.mt-error{color:#b42318}.mt-small{color:#64748b;font-size:11px}.mt-preview{color:#617085;line-height:1.4}.mt-editor input[readonly]{background:#eef2f6}.mt-obsolete{opacity:.7}.mt-publication{font-weight:600;color:#275e53}'+
@@ -25,7 +25,7 @@
  '<button id="mtImport" type="button" class="secondary">Import reviewed JSON</button>'+
  '<input class="hidden" type="file" id="mtJsonFile" accept=".json,application/json"></div>'+
  '<div id="mtPublication" class="mt-msg mt-publication" role="status"></div>'+'<div id="mtMessage" class="mt-msg" role="status"></div>'+
- '<div class="mt-main"><section class="mt-list"><table><thead><tr><th>#</th><th>Scope</th><th>Document and fields</th><th>Summary</th><th>Review status</th></tr></thead><tbody id="mtRows"></tbody></table></section>'+
+ '<div class="mt-main"><section class="mt-list"><table><thead><tr><th>#</th><th>Scope</th><th>Document and fields</th></tr></thead><tbody id="mtRows"></tbody></table></section>'+
  '<section id="mtEditor" class="mt-editor"><p>Select a document to edit its Master Table metadata.</p></section></div>';
  document.body.appendChild(dialog);
  const state={records:[],etag:null,selected:null,busy:false,publication:null,publishedCount:0,entryDirty:false};
@@ -136,9 +136,7 @@
    const name=node('td');name.append(node('strong',r.title),node('div',r.document_type||'', 'mt-small'),node('div',r.pathname,'mt-small'));
    const access=node('td',r.access);access.append(node('div',r.category,'mt-small'));if(!r.source_available)access.append(node('div','Unavailable','mt-error'));
    if(r.source_changed)access.append(node('div','Changed','mt-error'));
-   const details=node('td');details.append(node('div',r.summary||'(No summary yet)','mt-preview'));
-   const lifecycle=node('td',r.review_status||'Draft');
-   tr.append(node('td',index+1),access,name,details,lifecycle);
+   tr.append(node('td',index+1),access,name);
    tr.onclick=()=>{state.selected=r.id;render();edit()};host.append(tr);
   }
  }
