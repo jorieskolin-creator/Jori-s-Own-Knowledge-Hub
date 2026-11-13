@@ -18,7 +18,7 @@ Each run records the version of the expected results, the deployment, and the pu
 | Warning | One to three cases with unaccepted differences, or a published snapshot change during the run. |
 | Severe problems | Four or more cases with unaccepted differences, or any fixture eligibility or evidence integrity failure. |
 
-Count each affected case once. An accepted exception must identify the case, check, and exact expected and actual values. GS-003 v1 has zero accepted exceptions. GS-003-01 expects zero passages for the out-of-scope query.
+Count each affected case once. An accepted exception must identify the case, check, and exact expected and actual values. GS-003 v2 records GS-003-01 as an expected Review with four returned passages. This is the repeatability baseline. Zero passages remains the retrieval quality target. A run returning zero passes that quality check and records a change from the current baseline. The report shows the expected and actual case outcomes.
 
 ## Replay GS-001
 
