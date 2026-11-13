@@ -1,5 +1,8 @@
 {
   "version": 2,
+  "functions": {
+    "api/golden-standards.js": {"maxDuration": 120}
+  },
   "rewrites": [
     {
       "source": "/.well-known/oauth-protected-resource",
