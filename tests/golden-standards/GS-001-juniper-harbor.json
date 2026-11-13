@@ -1,0 +1,95 @@
+{
+  "format_version": 1,
+  "id": "GS-001",
+  "title": "Juniper Harbor recovery evidence and publication lifecycle",
+  "recorded_date": "2026-11-13",
+  "connector": "Knowledge Hub — Governed Evidence (Unified)",
+  "data_classification": "Fictional test case",
+  "prompt": "Use only evidence retrieved through Knowledge Hub — Governed Evidence (Unified).\n\nFor the Juniper Harbor service, what is the approved recovery time target, what recovery time was measured in the exercise, and did the exercise meet the target?\n\nFor each answer, quote the supporting passage and give the source ID, section or page, and passage ID where available. If the retrieved evidence does not support an answer, say “Unknown from available evidence.” Assess whether the target was met only if the retrieved evidence supports both the target and the measured time.\n\nAt the end, list how many evidence packages and passages the connector returned, and how many directly supported an answer. Record any retrieval warnings.",
+  "sources": {
+    "policy": {
+      "id": "private:03-general-presentations/Juniper Harbor_Recovery Policy_13112026.pdf",
+      "page": 1,
+      "expected_visible_text": "The approved recovery time target for the Juniper Harbor service is four hours."
+    },
+    "exercise": {
+      "id": "private:03-general-presentations/Juniper Harbor_Recovery Exercise_13112026.pdf",
+      "page": 1,
+      "expected_visible_text": "In the Juniper Harbor recovery exercise, the service was restored in three hours."
+    }
+  },
+  "queries": {
+    "focused_discovery": "Juniper Harbor",
+    "broad_discovery_diagnostic": "Juniper Harbor recovery time target exercise",
+    "exact_id_retrieval": "Juniper Harbor recovery time",
+    "exact_id_mode": "focused"
+  },
+  "expected_passage_requirements": {
+    "target_hours": ["policy"],
+    "measured_hours": ["exercise"],
+    "target_met_and_margin": ["policy", "exercise"]
+  },
+  "unknown_answer": "Unknown from available evidence.",
+  "runs": [
+    {
+      "run": 1,
+      "action": "Publish Policy as Approved before uploading Exercise.",
+      "published": {"policy": "Approved", "exercise": "Absent"},
+      "expected_eligible": ["policy"],
+      "expected_answer": {"target_hours": 4, "measured_hours": null, "target_met": null, "hours_under_target": null},
+      "observed": {"eligibility_scenario": "Passed", "packages_returned": 1, "packages_used": 1, "passages_returned": 1, "passages_used": 1, "citations": {"policy": "E001"}, "warnings": ["SEMANTIC_COMPLETENESS_NOT_VERIFIED"]}
+    },
+    {
+      "run": 2,
+      "action": "Upload Exercise, stage it as Draft, and publish the table with that status.",
+      "published": {"policy": "Approved", "exercise": "Draft"},
+      "expected_eligible": ["policy"],
+      "expected_answer": {"target_hours": 4, "measured_hours": null, "target_met": null, "hours_under_target": null},
+      "observed": {"eligibility_scenario": "Passed", "packages_returned": null, "packages_used": null, "passages_returned": null, "passages_used": 1, "citations": {"policy": "E001"}, "warnings": null, "direct_probe": {"exercise": "INVALID_ARGUMENT", "policy": "RELEASED"}}
+    },
+    {
+      "run": 3,
+      "action": "Save Exercise as Approved in the working table. Leave the published table as it was.",
+      "working_exercise_status": "Approved",
+      "published": {"policy": "Approved", "exercise": "Draft"},
+      "expected_eligible": ["policy"],
+      "expected_answer": {"target_hours": 4, "measured_hours": null, "target_met": null, "hours_under_target": null},
+      "observed": {"eligibility_scenario": "Passed", "packages_returned": 1, "packages_used": 1, "passages_returned": 10, "passages_used": 1, "citations": {"policy": "E001"}, "warnings": ["BOUNDED_RESULTS", "PARTIAL_PASSAGE_CONTEXT", "SEMANTIC_COMPLETENESS_NOT_VERIFIED"], "broad_candidates": {"found": 132, "returned": 30}, "direct_probe": {"exercise": "INVALID_ARGUMENT"}}
+    },
+    {
+      "run": 4,
+      "action": "Publish the staged Exercise approval.",
+      "published": {"policy": "Approved", "exercise": "Approved"},
+      "expected_eligible": ["policy", "exercise"],
+      "expected_answer": {"target_hours": 4, "measured_hours": 3, "target_met": true, "hours_under_target": 1},
+      "observed": {"eligibility_scenario": "Passed", "packages_returned": 1, "packages_used": 1, "passages_returned": 2, "passages_used": 2, "citations": {"policy": "E001", "exercise": "E002"}, "warnings": ["SEMANTIC_COMPLETENESS_NOT_VERIFIED"], "broad_candidates": {"found": 45, "returned": 30}, "focused_candidates": {"found": 2, "truncated": false}}
+    },
+    {
+      "run": 5,
+      "action": "Save Policy as Obsolete and publish the updated Master Table.",
+      "published": {"policy": "Obsolete", "exercise": "Approved"},
+      "expected_eligible": ["exercise"],
+      "expected_answer": {"target_hours": null, "measured_hours": 3, "target_met": null, "hours_under_target": null},
+      "observed": {"eligibility_scenario": "Passed", "packages_returned": 1, "packages_used": 1, "passages_returned": 10, "passages_used": 1, "citations": {"exercise": "E001"}, "warnings": ["BOUNDED_RESULTS", "PARTIAL_PASSAGE_CONTEXT", "SEMANTIC_COMPLETENESS_NOT_VERIFIED"], "direct_probe": {"policy": "INVALID_ARGUMENT", "exercise": "RELEASED"}}
+    }
+  ],
+  "diagnostic_after_run_5": {
+    "exact_id_exercise": {
+      "repetitions": 2,
+      "observed_same_passage_id_text_and_hashes": true,
+      "evidence_schema_version": 1,
+      "integrity_policy": "retrieval-integrity-v2",
+      "delivery_status": "RELEASED",
+      "integrity_status": "PASS",
+      "warnings": ["SEMANTIC_COMPLETENESS_NOT_VERIFIED"],
+      "page": 1,
+      "passage_id": "E001",
+      "original_file_sha256": "6556b35cb1ac711b5cde25499157b269e36f8d4d1c856ed80492fbcb5c1fff2a",
+      "passage_sha256": "0cd8043cd9d80d7d38c2ffa9c6952aa49eb9073af8838e9974ad55084cb67e7c",
+      "raw_passage": "Document   Summary  \nB  —   Juniper Harbor Recovery  “In the Juniper Harbor recovery exercise, the service was \nExercise   restored in three hours.”",
+      "extraction_observation": "The two-column PDF reading order inserts the title word Exercise into the sentence. The Run 5 answer reported a clean quote. The original Run 5 raw package was not retained here, so quote fidelity for that run is unverified."
+    },
+    "focused_discovery": {"candidates_found": 1, "candidates_examined": 1, "passages_returned": 1, "exercise_passages": 1},
+    "broad_discovery": {"candidates_found": 40, "candidates_returned": 30, "candidates_examined": 4, "passages_returned": 6, "exercise_passages": 1, "integrity_status": "WARN"}
+  }
+}
