@@ -36,7 +36,7 @@ async function approve(res,body){
  await writeMaster(next,etag);
  return send(res,200,{approved:true,publication:next.publication,
   published_count:next.published_records.length,
-  by_status:Object.fromEntries(['Approved','Draft','Obsolete'].map(status=>[
+  by_status:Object.fromEntries(['Approved','Draft','Obsolete','Golden Standard'].map(status=>[
    status,next.published_records.filter(r=>r.review_status===status).length
   ]))});
 }
@@ -55,7 +55,7 @@ async function sync(res){
  const merged=reconcile(table,documents,healthy);
  if(JSON.stringify(merged.table.records)!==JSON.stringify(table.records))await writeMaster(stageTable(merged.table),etag);
  const pending_public=merged.table.records.filter(e=>e.access==='public'&&e.source_available&&
-  e.review_status!=='Obsolete'&&!e.summary&&e.enrichment==='NONE'&&!(e.key_terms||[]).length&&!(e.themes||[]).length&&!e.source_changed).map(e=>e.id);
+  !['Obsolete','Golden Standard'].includes(e.review_status)&&!e.summary&&e.enrichment==='NONE'&&!(e.key_terms||[]).length&&!(e.themes||[]).length&&!e.source_changed).map(e=>e.id);
  return send(res,200,{added:merged.added,changed:merged.changed,unavailable:merged.missing,
   pending_public,source_count:documents.length,total_entries:merged.table.records.length,
   warnings:failures,ai_used:false});
@@ -68,6 +68,7 @@ async function enrich(res,body){
  const idx=table.records.findIndex(x=>x.id===body.id);
  if(idx<0)return send(res,404,{error:'Public entry not found'});
  const doc=table.records[idx];
+ if(doc.review_status==='Golden Standard')return send(res,409,{error:'Golden Standard fixtures cannot be AI-enriched'});
  if(doc.review_status==='Obsolete')return send(res,409,{error:'Obsolete sources cannot be AI-enriched; change the document status first'});
  if(doc.access!=='public'||!doc.source_available||doc.source_changed)
   return send(res,409,{error:'Public source is unavailable or changed; update inventory first'});

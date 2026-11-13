@@ -1,7 +1,7 @@
 'use strict';
 // Source-level publication gate. Status is authoritative ONLY in the last
 // explicitly published Master Table snapshot, never in working edits.
-const {readMaster,withPublication,discoveryRecords,sourceSignature}=require('./_master_table');
+const {readMaster,withPublication,discoveryRecords,sourceSignature,isGoldenStandardPath}=require('./_master_table');
 
 function approvedIndex(table){
  if(!table||typeof table!=='object'||!Array.isArray(table.records))
@@ -12,7 +12,7 @@ function approvedIndex(table){
   return new Map();
  const index=new Map();
  for(const record of discoveryRecords(normalized)){
-  if(record.review_status!=='Approved'||record.source_available!==true||record.source_changed===true)continue;
+  if(isGoldenStandardPath(record.pathname)||record.review_status!=='Approved'||record.source_available!==true||record.source_changed===true)continue;
   if(typeof record.id!=='string'||!['public','private'].includes(record.access)||
      record.id!==record.access+':'+record.pathname||
      typeof record.source_signature!=='string'||!(/^[a-f0-9]{64}$/).test(record.source_signature))
@@ -24,7 +24,7 @@ function approvedIndex(table){
 }
 function isApproved(doc,index){
  const record=index.get(doc?.id);
- return !!record&&record.access===doc.access&&record.pathname===doc.pathname&&
+ return !isGoldenStandardPath(doc?.pathname)&&!!record&&record.access===doc.access&&record.pathname===doc.pathname&&
   record.source_available===true&&!record.source_changed&&
   record.source_signature===sourceSignature(doc);
 }

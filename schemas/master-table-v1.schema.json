@@ -202,6 +202,7 @@
             "Approved",
             "Draft",
             "Obsolete",
+            "Golden Standard",
             null
           ]
         },

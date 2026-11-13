@@ -10,7 +10,12 @@ const MAX_MASTER_BYTES=3*1024*1024;
 const MASTER_TABLE_FORMAT='1.0';
 const TEXT_EXTRACTION=['NOT_ASSESSED','COMPLETE','PARTIAL','FAILED'];
 const VISUAL_INSPECTION=['NOT_ASSESSED','COMPLETE','PARTIAL'];
-const DOCUMENT_STATUSES=['Approved','Draft','Obsolete'];
+const GOLDEN_STANDARD_STATUS='Golden Standard';
+const GOLDEN_STANDARD_PREFIX='05-random/golden-standard/';
+const DOCUMENT_STATUSES=['Approved','Draft','Obsolete',GOLDEN_STANDARD_STATUS];
+function isGoldenStandardPath(path){
+ return typeof path==='string'&&path.toLowerCase().startsWith(GOLDEN_STANDARD_PREFIX);
+}
 const CATS=new Set(['01-solutions','02-frameworks','03-general-presentations','04-shared-knowledge','05-random','06-personal']);
 function masterEmpty(){return {schema_version:1,updated_at:null,records:[],
  published_records:[],publication:{status:'Draft',approved_at:null}};}
@@ -75,7 +80,7 @@ function withReviewFields(entry){
  e.reported_source_hash=e.reported_source_hash??null;
  e.text_extraction_detail=e.text_extraction_detail??'';
  e.visual_inspection_detail=e.visual_inspection_detail??'';
- e.review_status=reviewStatus(e.review_status);
+ e.review_status=isGoldenStandardPath(e.pathname)?GOLDEN_STANDARD_STATUS:reviewStatus(e.review_status);
  e.review_version=e.review_version??'';
  e.last_reviewed=e.last_reviewed??null;
  const old=e.extraction_status==='NOT_INSPECTED'||e.extraction_status==='MANUAL'?'NOT_ASSESSED':e.extraction_status;
@@ -93,7 +98,7 @@ function entryFromDoc(d){
   source_available:true,source_changed:false,source_hash:null,
   source_metadata_title:text(d.title||sourceTitle(path),220),
   summary:'',key_terms:[],themes:[],document_type:'',important_sections:[],related_documents:[],related_source_refs:[],
-  review_notes:'',review_status:'Draft',review_version:'',last_reviewed:null,
+  review_notes:'',review_status:isGoldenStandardPath(path)?GOLDEN_STANDARD_STATUS:'Draft',review_version:'',last_reviewed:null,
   text_extraction:'NOT_ASSESSED',visual_inspection:'NOT_ASSESSED',
   extraction_status:'NOT_INSPECTED',enrichment:'NONE',last_saved:null};
 }
@@ -165,7 +170,12 @@ function normalizeEdit(entry,changes,options={}){
   out.extraction_status=out.text_extraction==='NOT_ASSESSED'?'NOT_INSPECTED':out.text_extraction;
  }
  if('visual_inspection'in changes)out.visual_inspection=coverageState(changes.visual_inspection,VISUAL_INSPECTION);
- if('review_status'in changes)out.review_status=reviewStatus(changes.review_status);
+ if('review_status'in changes){
+  const next=reviewStatus(changes.review_status);
+  if((out.review_status===GOLDEN_STANDARD_STATUS||next===GOLDEN_STANDARD_STATUS)&&next!==out.review_status)
+   throw Error('Invalid status change: Golden Standard is assigned by the fixture folder');
+  out.review_status=next;
+ }
  if(options.markApproved!==false){
   if(options.reviewedAt!==undefined&&options.reviewedAt!==null){
    const time=Date.parse(options.reviewedAt);
@@ -253,7 +263,7 @@ function reconcile(table,documents,successfulScopes){
  const records=[...existing.values()].sort((a,b)=>a.access.localeCompare(b.access)||a.title.localeCompare(b.title));
  return {table:{...table,records},added,changed,missing};
 }
-module.exports={MASTER_PATH,STORE_ID,MASTER_TABLE_FORMAT,TEXT_EXTRACTION,VISUAL_INSPECTION,DOCUMENT_STATUSES,
+module.exports={MASTER_PATH,STORE_ID,MASTER_TABLE_FORMAT,TEXT_EXTRACTION,VISUAL_INSPECTION,DOCUMENT_STATUSES,GOLDEN_STANDARD_PREFIX,GOLDEN_STANDARD_STATUS,isGoldenStandardPath,
  masterEmpty,withPublication,stageTable,approveTable,discoveryRecords,reviewStatus,
  permitted,words,strings,sourceSignature,sourceTitle,withReviewFields,coverageState,
  entryFromDoc,normalizeEdit,bindRelatedSourceIds,inspectSourceLinks,descriptionHealth,readMaster,writeMaster,sourceInventory,reconcile};
