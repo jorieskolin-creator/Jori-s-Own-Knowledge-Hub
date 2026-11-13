@@ -14,7 +14,7 @@ const SOLUTIONS=[
 {id:'ai-transformation-engine',name:'AI Transformation Engine'},
 {id:'cscf-demo',name:'CSCF Demo'}
 ];
-const $=id=>document.getElementById(id);let documents=[],area='all',solution=null;let counts={public:0,private:0,legacy:0};
+const $=id=>document.getElementById(id);let documents=[],area='all',solution=null,randomGolden=false;let counts={public:0,private:0,legacy:0};
 function el(tag,cls,text){const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=String(text);return n}
 function msg(text,warn=false){$('alert').replaceChildren();if(text)$('alert').append(el('div','status'+(warn?' warn':''),text))}
 function showLogin(){$('app').classList.add('hidden');$('login').classList.remove('hidden')}
@@ -47,7 +47,7 @@ function documentSolution(d){
 }
 function createDocCard(d){
   const card=el('article','card');
-  card.append(el('span','label',d.group||d.category),el('h3','',d.title),
+  card.append(el('span','label',d.golden_standard?'Golden Standard':d.group||d.category),el('h3','',d.title),
     el('div','meta',(d.access==='private'?'🔐 Protected · Guest password':'Public · No reader password')+(d.updated?' · '+String(d.updated).slice(0,10):'')));
   const a=el('a','',d.access==='private'?'Open protected document ↗':'View document ↗');
   a.href=d.origin==='blob'?'/view.html?access='+encodeURIComponent(d.access)+'&pathname='+encodeURIComponent(d.pathname):d.url;
@@ -55,7 +55,7 @@ function createDocCard(d){
 }
 function draw(){
   const nav=$('nav');nav.replaceChildren();
-  for(const [key,name] of areas){const b=el('button',key===area?'active':'',name);b.onclick=()=>{area=key;solution=null;$('q').value='';draw()};nav.append(b)}
+  for(const [key,name] of areas){const b=el('button',key===area?'active':'',name);b.onclick=()=>{area=key;solution=null;randomGolden=false;$('q').value='';draw()};nav.append(b)}
   const filter=$('q').value.trim().toLowerCase();
   const matches=d=>[d.title,d.group,d.category,d.pathname||''].join(' ').toLowerCase().includes(filter);
   const filtered=documents.filter(d=>(area==='all'||d.category===area)&&matches(d));
@@ -84,7 +84,22 @@ function draw(){
     const back=el('button','','Solutions');back.onclick=()=>{solution=null;draw()};
     crumb.append(back,el('span','','›'),el('strong','',solutionName));
   }
-  const shown=area==='Solutions'&&solution?filtered.filter(d=>documentSolution(d)===solution):filtered;
+  if(area==='Random'&&!randomGolden&&!filter){
+    const fixtures=documents.filter(d=>d.golden_standard);
+    const folder=el('button','card foldercard');folder.type='button';
+    folder.append(el('div','foldericon','▱'),el('h3','','Golden Standard'),
+      el('div','foldercount',fixtures.length+' fixtures · Open folder →'));
+    folder.onclick=()=>{randomGolden=true;draw()};cards.append(folder);
+  }
+  if(area==='Random'&&randomGolden){
+    $('heading').textContent='Golden Standard';
+    crumb.classList.remove('hidden');
+    const back=el('button','','Random');back.onclick=()=>{randomGolden=false;draw()};
+    crumb.append(back,el('span','','›'),el('strong','','Golden Standard'));
+  }
+  const shown=area==='Solutions'&&solution?filtered.filter(d=>documentSolution(d)===solution):
+    area==='Random'?filtered.filter(d=>randomGolden?d.golden_standard:filter||!d.golden_standard):
+    filter?filtered:filtered.filter(d=>!d.golden_standard);
   $('results').textContent=shown.length+' document'+(shown.length===1?'':'s');
   if(!shown.length){cards.append(el('p','small','No matching documents.'));return}
   for(const d of shown)cards.append(createDocCard(d));
@@ -93,6 +108,6 @@ async function refresh(){const b=$('refresh');b.disabled=true;msg('Scanning both
 $('loginForm').onsubmit=async e=>{e.preventDefault();$('loginButton').disabled=true;$('loginError').textContent='';try{await api('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:$('password').value})});$('password').value='';showApp();await refresh()}catch(err){$('loginError').textContent=err.message}finally{$('loginButton').disabled=false}};
 $('logout').onclick=async()=>{try{await api('/api/logout',{method:'POST'})}finally{documents=[];showLogin()}};
 $('q').oninput=draw;$('refresh').onclick=refresh;
-$('initialize').onclick=async()=>{if(!confirm('Create six category prefixes and seven Solutions subfolder prefixes in each available Blob store? This writes .folder placeholders.'))return;$('initialize').disabled=true;try{const r=await api('/api/initialize-folders',{method:'POST'});msg('Created '+r.created+' of '+r.expected+' folder placeholders. '+(r.errors?.length?r.errors.join('; '):''),!!r.errors?.length)}catch(e){msg(e.message,true)}finally{$('initialize').disabled=false}};
+$('initialize').onclick=async()=>{if(!confirm('Create category and Solutions folder prefixes in both stores and a private Golden Standard folder? This writes .folder placeholders.'))return;$('initialize').disabled=true;try{const r=await api('/api/initialize-folders',{method:'POST'});msg('Created '+r.created+' of '+r.expected+' folder placeholders. '+(r.errors?.length?r.errors.join('; '):''),!!r.errors?.length)}catch(e){msg(e.message,true)}finally{$('initialize').disabled=false}};
 (async()=>{try{const r=await api('/api/session');if(r.authenticated){showApp();await refresh()}else showLogin()}catch{showLogin()}})();
 </script><script src="/master-table.js" defer></script></body></html>

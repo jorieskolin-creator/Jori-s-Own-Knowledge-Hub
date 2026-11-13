@@ -1,5 +1,6 @@
 const {list}=require('@vercel/blob');
 const {send,valid}=require('./_auth');
+const {isGoldenStandardPath}=require('./_master_table');
 
 const CATS={
   '01-solutions':'Solutions',
@@ -36,6 +37,7 @@ async function scan(storeId,access){
       category:CATS[p[0]],
       group:p.length>2?cleanTitle(p.slice(1,-1).join(' / ')):'General',
       access,
+      golden_standard:isGoldenStandardPath(b.pathname),
       pathname:b.pathname,
       url:access==='public'?b.url:null,
       updated:b.uploadedAt||null,

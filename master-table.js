@@ -20,7 +20,7 @@
  const dialog=document.createElement('dialog');dialog.id='mtDialog';
  dialog.innerHTML='<div class="mt-header"><h2>Master Table</h2><span id="mtCount" class="small"></span><button type="button" class="secondary" id="mtClose">Close</button></div>'+
  '<div class="mt-tools"><input id="mtSearch" type="search" placeholder="Search summary, title, keywords and themes">'+
- '<select id="mtScope"><option value="all">All documents</option><option value="public">Public</option><option value="private">Private</option></select>'+'<select id="mtStatus"><option value="all">All statuses</option><option value="Approved">Approved</option><option value="Draft">Draft</option><option value="Obsolete">Obsolete</option></select>'+
+ '<select id="mtScope"><option value="all">All documents</option><option value="public">Public</option><option value="private">Private</option></select>'+'<select id="mtStatus"><option value="all">All statuses</option><option value="Approved">Approved</option><option value="Draft">Draft</option><option value="Obsolete">Obsolete</option><option value="Golden Standard">Golden Standard</option></select>'+
  '<button id="mtReload" type="button" class="secondary">Reload</button>'+'<button id="mtApprove" type="button" class="primary">Save &amp; approve Master Table</button>'+
  '<button id="mtImport" type="button" class="secondary">Import reviewed JSON</button>'+
  '<input class="hidden" type="file" id="mtJsonFile" accept=".json,application/json"></div>'+
@@ -87,10 +87,12 @@
   ]);
   const visualDetail=field(host,'Visual inspection detail',item.visual_inspection_detail||'',false);
   const version=field(host,'Review version (optional)',item.review_version||'',false);
-  const reviewStatus=choice(host,'Document lifecycle status',item.review_status||'Draft',[
+  const isFixture=item.review_status==='Golden Standard';
+  const reviewStatus=choice(host,'Document lifecycle status',item.review_status||'Draft',isFixture?[['Golden Standard','Golden Standard — test fixture']]:[
    ['Approved','Approved — current source'],['Draft','Draft — under review'],
    ['Obsolete','Obsolete — retained for historical comparison']
   ]);
+  reviewStatus.disabled=isFixture;
   field(host,'Last reviewed (recorded when entry is saved)',item.last_reviewed||'Not yet reviewed',false,true);
   host.append(node('p','Save entry stages changes without publishing. Save & approve Master Table publishes the working table. Obsolete files remain stored for administrative review but are blocked from normal MCP retrieval, even by ID.','mt-small'));
   state.entryDirty=false;

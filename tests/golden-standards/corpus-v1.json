@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "fixtures": [
+    {"file":"01-aster-recovery-policy.html","title":"Aster Quay Recovery Policy","text":"The approved recovery time target for Aster Quay is four hours."},
+    {"file":"02-aster-recovery-exercise.pdf","title":"Aster Quay Recovery Exercise","text":"The Aster Quay recovery exercise restored the service in three hours."},
+    {"file":"03-aster-backup-cadence.html","title":"Aster Quay Backup Schedule","text":"Aster Quay backups are taken every six hours."},
+    {"file":"04-birch-retention-policy.html","title":"Birch Pier Retention Policy","text":"Birch Pier retains audit logs for 90 days."},
+    {"file":"05-birch-retention-proposal.html","title":"Birch Pier Retention Proposal","text":"A proposal to extend Birch Pier audit log retention to 180 days is pending review."},
+    {"file":"06-cedar-access-policy.html","title":"Cedar Dock Access Policy","text":"Cedar Dock requires individual administrator accounts."},
+    {"file":"07-cedar-access-observation.html","title":"Cedar Dock Access Observation","text":"The Cedar Dock review found that two operators shared one administrator account."},
+    {"file":"08-delta-scope.html","title":"Delta Wharf Exercise Scope","text":"The Delta Wharf exercise covered application recovery. Network failover was outside the exercise scope."},
+    {"file":"09-ember-public-commitment.html","title":"Ember Bay Service Commitment","text":"Ember Bay commits to acknowledge service incidents within 30 minutes.","test_access":"public"},
+    {"file":"10-ember-private-observation.pdf","title":"Ember Bay Incident Observation","text":"The Ember Bay incident was acknowledged after 45 minutes."},
+    {"file":"11-fir-long-procedure.html","title":"Fir Haven Restoration Procedure","text":"The Fir Haven restoration verification phrase is violet compass.","long_prefix":true},
+    {"file":"12-grove-two-column.pdf","title":"Grove Reach Recovery Exercise","text":"The Grove Reach exercise restored the service in five hours.","two_columns":true},
+    {"file":"13-hazel-partial-report.pdf","title":"Hazel Point Recovery Report","text":"The Hazel Point report identifies the recovery window as pending confirmation.","blank_second_page":true},
+    {"file":"14-iris-irrelevant-policy.html","title":"Iris Key Office Policy","text":"Iris Key staff may reserve meeting rooms for up to four hours."},
+    {"file":"15-jade-lookalike-exercise.html","title":"Jade Shoal Recovery Exercise","text":"The Jade Shoal recovery exercise restored the service in two hours."}
+  ],
+  "cases": [
+    {"id":"GS-002-01","prompt":"For Aster Quay, what was the approved recovery time target, how long did restoration take, and was the target met?","required":["01-aster-recovery-policy.html","02-aster-recovery-exercise.pdf"],"expected":"Four hours, three hours, and yes by one hour. Cite both sources."},
+    {"id":"GS-002-02","prompt":"How often are Aster Quay backups taken, and what recovery point objective was approved?","required":["03-aster-backup-cadence.html"],"expected":"Every six hours. The approved recovery point objective is unknown from available evidence."},
+    {"id":"GS-002-03","prompt":"What is the current Birch Pier audit log retention period? Has the proposed extension been approved?","required":["04-birch-retention-policy.html","05-birch-retention-proposal.html"],"expected":"90 days. The 180-day proposal is pending review."},
+    {"id":"GS-002-04","prompt":"What does Cedar Dock require for administrator accounts, and what did the review observe?","required":["06-cedar-access-policy.html","07-cedar-access-observation.html"],"expected":"Individual accounts are required. Two operators shared one account, which conflicts with the policy."},
+    {"id":"GS-002-05","prompt":"Was Delta Wharf network failover exercised, and did it succeed?","required":["08-delta-scope.html"],"expected":"It was outside the exercise scope. Success is unknown from available evidence."},
+    {"id":"GS-002-06","prompt":"Did the Ember Bay incident meet the acknowledgement commitment? State the commitment, observed time, and difference.","required":["09-ember-public-commitment.html","10-ember-private-observation.pdf"],"expected":"No. The 30-minute commitment was exceeded by 15 minutes. Cite the Public and Private test sources."},
+    {"id":"GS-002-07","prompt":"What is the restoration verification phrase in the Fir Haven procedure?","required":["11-fir-long-procedure.html"],"expected":"Violet compass. Cite the verification section beyond the first 120,000 source characters."},
+    {"id":"GS-002-08","prompt":"How long did the Grove Reach exercise take? Quote the exact supporting text returned by retrieval.","required":["12-grove-two-column.pdf"],"expected":"Five hours. Score reading order and quote fidelity separately. Report any extra text inserted between words."},
+    {"id":"GS-002-09","prompt":"What recovery window was confirmed for Hazel Point? Identify any coverage limitation.","required":["13-hazel-partial-report.pdf"],"expected":"Unknown from available evidence. Page 1 says confirmation is pending. The second page has no extractable text."}
+  ]
+}
