@@ -5,6 +5,20 @@ Store reviewed test cases, expected evidence, and run observations here so they 
 | Case | Coverage |
 | --- | --- |
 | [GS-001 · Juniper Harbor](./GS-001-juniper-harbor.json) | Draft, staged and published approval, Obsolete exclusion, two-source reasoning, PDF reading order and retrieval precision |
+| [GS-003 · Connector expected results](./GS-003-connector-expected-results.json) | Versioned inputs and expected outcomes for the ten admin UI checks |
+| [GS-003 · Answer-level runbook](./GS-003-knowledge-hub-test-prompts.md) | Prompts and expected answer behavior for manual review |
+
+## Compare GS-003 connector results
+
+Each run records the version of the expected results, the deployment, and the published Master Table revision. Update the version when reviewing a change to the expected behavior, queries, or accepted exceptions. Candidate counts, truncation, and returned passage counts on positive cases are diagnostics.
+
+| Status | Rule |
+| --- | --- |
+| OK | Zero cases with unaccepted differences. Up to one explicitly accepted, non-critical exception can be shown. |
+| Warning | One to three cases with unaccepted differences, or a published snapshot change during the run. |
+| Severe problems | Four or more cases with unaccepted differences, or any fixture eligibility or evidence integrity failure. |
+
+Count each affected case once. An accepted exception must identify the case, check, and exact expected and actual values. GS-003 v1 has zero accepted exceptions. GS-003-01 expects zero passages for the out-of-scope query.
 
 ## Replay GS-001
 

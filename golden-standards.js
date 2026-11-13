@@ -13,10 +13,47 @@
   return el;
  };
  const date=value=>value?new Date(value).toLocaleString():'Unavailable';
+ const comparisonLabels={ok:'OK',warning:'Warning',severe:'Severe problems'};
+ function renderComparison(comparison){
+  const {severity,difference_cases,accepted_cases,differences}=comparison;
+  const section=node('div',undefined,'gs-comparison');
+  const message=severity==='severe'?'Pause use of Knowledge Hub evidence until the failures are investigated.':
+   severity==='warning'?'Run Golden Standards once more. If the differences persist, check the affected cases and the connector and Master Table status.':
+   accepted_cases?'1 known exception accepted.':'All checks met expectations.';
+  section.append(node('p',message),node('p','Expected results · GS-003 v'+comparison.version,'small'));
+  if(!differences.length)return section;
+  const table=node('table',undefined,'gs-differences');
+  const head=node('thead'),headRow=node('tr'),body=node('tbody');
+  for(const label of ['Case and check','Expected','Actual'])headRow.append(node('th',label));
+  head.append(headRow);
+  table.append(head,body);
+  for(const difference of differences){
+   const tr=node('tr');
+   tr.append(node('th',difference.case_id+' · '+difference.title+' · '+difference.check),
+    node('td',String(difference.expected)),
+    node('td',String(difference.actual)+(difference.accepted?' · Accepted':difference.critical?' · Critical':'')));
+   body.append(tr);
+  }
+  section.append(table);
+  return section;
+ }
  function renderReport(report,label){
   const details=node('details');
   const passed=report.cases.filter(row=>row.status==='Pass').length;
-  details.append(node('summary',label+' · '+report.status+' · '+passed+'/'+report.cases.length+' passed · '+date(report.completed_at)));
+  const summary=node('summary',label+' ');
+  const comparison=report.comparison;
+  if(comparison){
+   const count=comparison.difference_cases;
+   const caption=(count?' · '+count+(count===1?' difference':' differences'):'')+
+    (comparison.accepted_cases?' · 1 known exception':'');
+   summary.append(node('span',comparisonLabels[comparison.severity]+caption,'gs-tag gs-tag-'+comparison.severity));
+  }else{
+   summary.append(node('span',' · '+report.status));
+  }
+  summary.append(node('span',' · '+passed+'/'+report.cases.length+' passed · '+date(report.completed_at)));
+  details.append(summary);
+  if(comparison)details.append(renderComparison(comparison));
+  else details.append(node('p','This report predates the versioned comparison.','small'));
   const deployment=report.deployment.commit?.slice(0,12)||report.deployment.id;
   details.append(node('p','Deployment '+deployment+' · Master Table published '+date(report.published_snapshot.published_at)+
    ' · Revision '+report.published_snapshot.revision.slice(0,12),'small'));

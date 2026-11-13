@@ -5,7 +5,7 @@ const fs=require('node:fs');
 const {BlobNotFoundError,BlobPreconditionFailedError}=require('@vercel/blob');
 const master=require('../api/_master_table');
 const {SourceAccessError}=require('../api/_request_errors');
-const {FIXTURE_PATH,publishedSnapshot,runChecks}=require('../api/_golden_standard_checks');
+const {FIXTURE_PATH,publishedSnapshot,runChecks,compareResults}=require('../api/_golden_standard_checks');
 
 test('published snapshot identity ignores working Master Table edits',()=>{
  const published=master.approveTable({records:[master.entryFromDoc({id:'public:02-frameworks/example.html',access:'public',
@@ -20,10 +20,12 @@ test('published snapshot identity ignores working Master Table edits',()=>{
 test('suite reports actual fixture denial and marks unrelated released evidence for review',async()=>{
  const fixture='private:'+FIXTURE_PATH;
  const attempts=[];
+ let allowFixture=false;
  const service={catalog:async()=>[],execute:async(operation,args)=>{
   attempts.push(operation);
   if(operation==='retrieve_evidence'){
    assert.deepEqual(args.ids,[fixture]);
+   if(allowFixture)return {delivery_status:'RELEASED',evidence:{passages:[{id:fixture}]}};
    throw new SourceAccessError('Source unavailable');
   }
   const discovery={candidates:[],candidates_found:0,candidates_returned:0,candidates_truncated:false};
@@ -39,18 +41,42 @@ test('suite reports actual fixture denial and marks unrelated released evidence 
  assert.equal(cases[0].status,'Review');
  assert.equal(cases[0].passages_returned,1);
  assert.equal(cases[0].reference_passages,0);
+ assert.deepEqual(cases[0].differences.map(({check,expected,actual})=>({check,expected,actual})),
+  [{check:'Evidence passages returned',expected:0,actual:1}]);
  assert.equal(cases[9].status,'Pass');
  assert.equal(cases[9].fixture_denied,true);
  assert.equal(cases[9].failures.length,0);
  assert.ok(attempts.includes('retrieve_evidence'));
  assert.doesNotMatch(JSON.stringify(cases),/unrelated text|golden-standard\//);
  assert.equal((await runChecks({service,fixturePresent:false}))[9].status,'Review');
+ allowFixture=true;
+ const exposed=(await runChecks({service,fixturePresent:true}))[9];
+ assert.equal(compareResults([exposed]).severity,'severe');
+ assert.equal(exposed.fixture_denied,false);
+});
+
+test('versioned comparisons count cases and escalate critical failures',()=>{
+ const difference={case_id:'GS-003-01',title:'Out of scope',check:'Evidence passages returned',expected:0,actual:4};
+ const compare=(differences,snapshotChanged=false,exceptions=[])=>compareResults([{differences}],snapshotChanged,exceptions);
+ assert.equal(compare([]).severity,'ok');
+ assert.equal(compare([],true).severity,'warning');
+ assert.equal(compare([difference]).severity,'warning');
+ const accepted=compare([difference],false,[difference]);
+ assert.equal(accepted.severity,'ok');
+ assert.equal(accepted.accepted_cases,1);
+ assert.equal(accepted.differences[0].accepted,true);
+ assert.equal(compare([{...difference,actual:5}],false,[difference]).severity,'warning');
+ assert.equal(compare([difference,{...difference,check:'Tool-call failures'}]).difference_cases,1);
+ const differences=Array.from({length:4},(_,i)=>({...difference,case_id:'GS-003-0'+(i+1)}));
+ assert.equal(compare(differences.slice(0,3)).severity,'warning');
+ assert.equal(compare(differences).severity,'severe');
+ assert.equal(compare([{...difference,critical:true}],false,[difference]).severity,'severe');
 });
 
 test('report storage uses the metadata ETag, retries conflicts and retains the previous release',async()=>{
  let stored=null,writes=0,runs=0,deployment='release-a',conflictOnWrite=false,conflicts=0;
  const table=master.approveTable({records:[]},'2026-11-13T10:00:00Z');
- const cases=Array.from({length:10},(_,i)=>({id:'GS-003-'+i,status:'Pass'}));
+ const cases=Array.from({length:10},(_,i)=>({id:'GS-003-'+i,status:'Pass',differences:[]}));
  const deps={
   '@vercel/blob':{
    BlobNotFoundError,BlobPreconditionFailedError,
@@ -80,7 +106,7 @@ test('report storage uses the metadata ETag, retries conflicts and retains the p
   './_auth':{valid:req=>req.admin,send:(res,code,payload)=>Object.assign(res,{code,payload})},
   './_master_table':{STORE_ID:()=> 'test-store',readMaster:async()=>({table})},
   './_governed_unified':{createService:()=>({catalog:async()=>[]})},
-  './_golden_standard_checks':{FIXTURE_PATH,publishedSnapshot,deploymentInfo:()=>({id:deployment,commit:deployment}),
+  './_golden_standard_checks':{FIXTURE_PATH,publishedSnapshot,compareResults,deploymentInfo:()=>({id:deployment,commit:deployment}),
    runChecks:async()=>{runs++;return cases;}}
  };
  const endpoint={exports:{}};
@@ -98,6 +124,7 @@ test('report storage uses the metadata ETag, retries conflicts and retains the p
  assert.equal(writes,0);
  const first=(await call('POST')).payload;
  assert.equal(first.saved,true);
+ assert.equal(first.report.comparison.severity,'ok');
  assert.equal((await call('GET')).payload.latest.deployment.id,'release-a');
  await new Promise(resolve=>setTimeout(resolve,5));
  conflictOnWrite=true;
