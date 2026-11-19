@@ -6,10 +6,13 @@ const ENTITY_PAIR=/(?<![\p{L}\p{N}_])\p{Lu}\p{Ll}{1,}(?:[’'-]\p{Lu}?\p{Ll}+)?[
 const ENTITY_SUFFIX=/(?:^|\W)[\p{L}\p{N}._-]+\s+(?:oyj?|abp?|ltd|inc|llc|corp|gmbh|plc)\b/iu;
 const PROPER_WORD=/(?<![\p{L}\p{N}_])(?:[\p{Lu}][\p{Ll}]{2,}|[\p{Ll}]+[\p{Lu}][\p{L}]+|[\p{Lu}]{3,})(?![\p{L}\p{N}_])/gu;
 const SAFE_WORDS=new Set('AI API CO2 CSCF CSV DOCX EU EUC GDPR HTML ICT IT JSON KPI LLM LZ MCP OCR PDF PII PR RFP SaaS SecOps SRE TTL URL UX FinOps GenAI DevOps Knowledge Hub Generate Ground Govern Level Landing Zone Public Private Word Helsinki Shaping Demand Validated Proposal Signal Agentic Flow Evolving Modernization Concept Value Creation Flywheel'.split(' '));
+const FRAMEWORK_PREFIXES=new Set(['At','For','From','In','To','With']);
 const SOURCE_POINTER=/(?:\b(?:public|private):|(?:^|\s)[\w.%/-]+\.(?:pdf|html?|docx)\b|\b06-personal\b)/iu;
 const RECONSTRUCTION=/(?:\b(?:verbatim|word.for.word|entire (?:file|document|source)|full (?:file|document|text|source)|(?:next|previous) (?:page|paragraph|section)|(?:reproduce|transcribe|copy|dump) (?:the |that |this )?(?:file|document|source|text|section))\b|\b(?:sanasta sanaan|koko asiakirja|koko dokumentti|seuraava sivu)\b)/iu;
 const OVERRIDE=/(?:ignore|override|reveal|disregard|ohita|paljasta)\s+(?:all |the |your |aiemmat )?(?:previous instructions|system prompt|developer instructions|safety rules|aiemmat ohjeet|järjestelmäohjeet)/iu;
-class ChatPolicy extends Error{constructor(){super('This request or answer could not be released under the Chat rules');}}
+class ChatPolicy extends Error{
+  constructor(reason){super('This request or answer could not be released under the Chat rules');this.reason=reason;}
+}
 function normalized(text){
   return text.normalize('NFKC').replace(/[\p{Cf}\p{Cc}]/gu,char=>/^[\n\r\t]$/.test(char)?char:'');
 }
@@ -24,7 +27,10 @@ function explicitIdentifier(text,terms=deniedTerms()){
   const lower=value.toLowerCase();
   return CONTACT.test(value)||SOURCE_POINTER.test(value)||SECRETS.test(value)||IDENTIFIER.test(value)||ENTITY_SUFFIX.test(value)||
     terms.some(term=>lower.includes(term))||
-    [...value.matchAll(ENTITY_PAIR)].some(match=>match[0].trim().split(/\s+/).some(part=>!SAFE_WORDS.has(part)));
+    [...value.matchAll(ENTITY_PAIR)].some(match=>{
+      const [first,second]=match[0].split(/\s+/);
+      return !SAFE_WORDS.has(second)||(!SAFE_WORDS.has(first)&&!FRAMEWORK_PREFIXES.has(first));
+    });
 }
 function ambiguousName(text){
   const value=normalized(text);
@@ -52,7 +58,7 @@ function screenPassages(passages){
 }
 function screenAnswer(text){
   const value=normalized(text);
-  if(explicitIdentifier(value)||ambiguousName(value)||OVERRIDE.test(value)||/[<>]/.test(value))throw new ChatPolicy();
+  if(explicitIdentifier(value)||ambiguousName(value)||OVERRIDE.test(value)||/[<>]/.test(value))throw new ChatPolicy('answer_identifier');
   return value;
 }
 module.exports={ChatPolicy,screenQuestion,screenPassages,screenAnswer};

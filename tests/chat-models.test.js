@@ -75,3 +75,22 @@ test('Gemini Developer API is explicitly selected and rejects ineligible data be
   assert.deepEqual(await model.ask(FALLBACK,'chat_verification','test',{}, {},new Set(['question','public'])),{supported:true});
   assert.equal(sent,1);
 });
+
+test('A blocked draft is rewritten once using only the cleared question and evidence',async()=>{
+  const attempts=[];
+  const model={
+    allowed:()=>true,
+    moderate:async texts=>texts.map(()=>false),
+    ask:async (_provider,kind,instructions,input)=>{
+      if(kind==='chat_verification')return {supported:true};
+      attempts.push(instructions);
+      assert.doesNotMatch(JSON.stringify(input),/Placeholder/);
+      if(attempts.length===1)return {status:'supported',claims:[{text:'Jane Placeholder reviews the evidence.',refs:['H1']}]};
+      return {status:'supported',claims:[{text:'At Generate, the reviewer checks the catalogue.',refs:['H1']}]};
+    }
+  };
+  const answer=await testAnswer(model);
+  assert.equal(answer.status,'answer');
+  assert.equal(attempts.length,2);
+  assert.match(attempts[1],/Rewrite using shorter sentences/);
+});
