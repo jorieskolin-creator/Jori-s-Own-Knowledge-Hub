@@ -12,6 +12,8 @@ const followLabel=el('chat-follow-label');
 const follow=el('chat-follow');
 const pdfFields=el('chat-pdf-fields');
 const pdfFiles=el('chat-pdfs');
+const wordLabel=el('chat-word-label');
+const word=el('chat-word');
 let previous=null;
 let pending=null;
 
@@ -26,6 +28,8 @@ async function chatRequest(action,body,signal){
     }
   }
   const response=await fetch('/api/chat?action='+action,options);
+  if(response.ok&&response.headers.get('content-type')?.startsWith('application/vnd.openxmlformats-officedocument.wordprocessingml.document'))
+    return {report:await response.blob()};
   const result=await response.json();
   if(!response.ok){
     if(response.status===401&&action!=='login')showSession(false);
@@ -34,8 +38,9 @@ async function chatRequest(action,body,signal){
   }
   return result;
 }
-function showSession(authenticated,pdfs=false){
+function showSession(authenticated,pdfs=false,wordEnabled=false){
   pdfFields.hidden=!pdfs;
+  wordLabel.hidden=!wordEnabled;
   login.hidden=authenticated;
   workspace.hidden=!authenticated;
   logout.hidden=!authenticated;
@@ -45,6 +50,7 @@ function showSession(authenticated,pdfs=false){
     previous=null;
     question.value='';
     pdfFiles.value='';
+    word.checked=false;
     results.replaceChildren();
     follow.checked=false;
     followLabel.hidden=true;
@@ -79,7 +85,7 @@ login.addEventListener('submit',async event=>{
   password.value='';
   const button=login.querySelector('button');
   button.disabled=true;
-  try{const result=await chatRequest('login',{password:supplied});showSession(result.authenticated,result.pdfs);}
+  try{const result=await chatRequest('login',{password:supplied});showSession(result.authenticated,result.pdfs,result.word);}
   catch(error){statusMessage.textContent=error.message;}
   finally{button.disabled=false;}
 });
@@ -98,10 +104,12 @@ questionForm.addEventListener('submit',async event=>{
   if(files.length>2||files.reduce((sum,file)=>sum+file.size,0)>=4*1024*1024){
     statusMessage.textContent='Choose up to two PDFs under 4 MB combined.';return;
   }
-  let payload={question:combined};
+  const format=!wordLabel.hidden&&word.checked?'word':'chat';
+  let payload={question:combined,format};
   if(files.length){
     payload=new FormData();
     payload.set('question',combined);
+    payload.set('format',format);
     for(const file of files)payload.append('pdf',file);
   }
   const button=el('chat-submit');
@@ -110,7 +118,14 @@ questionForm.addEventListener('submit',async event=>{
   statusMessage.textContent='Checking the evidence…';
   try{
     const result=await chatRequest('answer',payload,pending.signal);
-    showAnswer(asked,result);
+    if(result.report){
+      const url=URL.createObjectURL(result.report);
+      const link=document.createElement('a');
+      link.href=url;
+      link.download='knowledge-hub-chat-report.docx';
+      link.click();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }else showAnswer(asked,result);
     previous=files.length?null:{question:asked,expires:Date.now()+5*60*1000};
     followLabel.hidden=!previous;
     pdfFiles.value='';
@@ -121,5 +136,5 @@ questionForm.addEventListener('submit',async event=>{
     if(error.name!=='AbortError')statusMessage.textContent=error.message;
   }finally{pending=null;button.disabled=false;}
 });
-chatRequest('session').then(result=>showSession(result.authenticated,result.pdfs))
+chatRequest('session').then(result=>showSession(result.authenticated,result.pdfs,result.word))
   .catch(error=>{statusMessage.textContent=error.message;});

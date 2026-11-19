@@ -8,6 +8,7 @@ const {createChatEvidence}=require('./_chat_evidence');
 const {createModels,ModelUnavailable}=require('./_chat_models');
 const {makeAnswer}=require('./_chat_answer');
 const {readUpload,attachmentEvidence,ChatPdfError}=require('./_chat_pdf');
+const {createReport,MIME}=require('./_chat_report');
 
 function chatShell(res){
   res.setHeader('Cache-Control','private, no-store, max-age=0');
@@ -30,6 +31,7 @@ function chatShell(res){
 <div id="chat-pdf-fields" hidden><label for="chat-pdfs">PDF attachments (optional)</label>
 <input id="chat-pdfs" type="file" accept="application/pdf" multiple aria-describedby="chat-pdf-hint">
 <p id="chat-pdf-hint" class="hint">Up to two PDFs and 4 MB combined. Files are used for this request only.</p></div>
+<label id="chat-word-label" hidden><input id="chat-word" type="checkbox"> Download the answer as a Word report</label>
 <button id="chat-submit" class="primary">Ask</button></form>
 <section id="chat-results" aria-label="Answers" aria-live="polite"></section></section>
 <p id="chat-status" role="status">Checking session…</p></main></body></html>`);
@@ -40,7 +42,8 @@ function jsonBody(req){
 }
 function createHandler({state=createState(),enabled=()=>process.env.KNOWLEDGE_HUB_CHAT_ENABLED==='true',
   evidenceFor=createChatEvidence,modelsFor=createModels,
-  pdfEnabled=()=>process.env.KNOWLEDGE_HUB_CHAT_PDF_ENABLED==='true',extractAttachments=attachmentEvidence}={}){
+  pdfEnabled=()=>process.env.KNOWLEDGE_HUB_CHAT_PDF_ENABLED==='true',extractAttachments=attachmentEvidence,
+  wordEnabled=()=>process.env.KNOWLEDGE_HUB_CHAT_WORD_ENABLED==='true',reportFor=createReport}={}){
   function retry(res,at,message){
     res.setHeader('Retry-After',String(Math.max(1,Math.ceil((at-Date.now())/1000))));
     return send(res,429,{error:message});
@@ -65,7 +68,9 @@ function createHandler({state=createState(),enabled=()=>process.env.KNOWLEDGE_HU
       if(!multipart&&!/^application\/json(?:;|$)/i.test(req.headers['content-type']||''))
         return send(res,415,{error:'Send a JSON request'});
       const body=multipart?await readUpload(req):jsonBody(req);
-      const question=screenQuestion(body?.question,body?.format||'chat');
+      const format=body?.format??'chat';
+      if(format==='word'&&!wordEnabled())return send(res,415,{error:'Word reports are unavailable'});
+      const question=screenQuestion(body?.question,format);
       const attachments=multipart&&body.files.length?await extractAttachments(body.files,question,signal):{passages:[],incomplete:false};
       const hub=evidenceFor();
       const evidence=await hub.acquire(question);
@@ -73,7 +78,18 @@ function createHandler({state=createState(),enabled=()=>process.env.KNOWLEDGE_HU
         hub,attachments:attachments.passages,models:modelsFor({signal}),
         key:config.key,beforeEgress:stillSignedIn});
       await stillSignedIn();
-      return send(res,200,result);
+      if(format==='word'){
+        const bytes=await reportFor(result);
+        await stillSignedIn();
+        await hub.assertCurrent(result.sourceChecks||[]);
+        res.setHeader('Content-Type',MIME);
+        res.setHeader('Content-Disposition','attachment; filename="knowledge-hub-chat-report.docx"');
+        res.setHeader('Cache-Control','private, no-store, max-age=0');
+        res.setHeader('X-Content-Type-Options','nosniff');
+        return res.status(200).end(bytes);
+      }
+      const {sourceChecks:_internal,...publicResult}=result;
+      return send(res,200,publicResult);
     }finally{
       res.off?.('close',onClose);
       // The self-expiring lease remains effective if release is interrupted.
@@ -91,7 +107,7 @@ function createHandler({state=createState(),enabled=()=>process.env.KNOWLEDGE_HU
       if(action==='shell')return chatShell(res);
       if(action==='session'){
         const active=await auth.activeSession(req,state,config.key);
-        return send(res,200,{authenticated:Boolean(active),pdfs:Boolean(active)&&pdfEnabled()});
+        return send(res,200,{authenticated:Boolean(active),pdfs:Boolean(active)&&pdfEnabled(),word:Boolean(active)&&wordEnabled()});
       }
       if(action==='logout'){
         await auth.logout(req,state,config.key);
@@ -106,7 +122,7 @@ function createHandler({state=createState(),enabled=()=>process.env.KNOWLEDGE_HU
       if(result.retryAt)return retry(res,result.retryAt,'Too many sign-in attempts');
       if(!result.token)return send(res,401,{error:'Invalid chat password'});
       res.setHeader('Set-Cookie',auth.cookie(result.token,auth.SESSION_MS/1000));
-      return send(res,200,{authenticated:true,pdfs:pdfEnabled()});
+      return send(res,200,{authenticated:true,pdfs:pdfEnabled(),word:wordEnabled()});
     }catch(error){
       if(error instanceof ChatLimit)return retry(res,error.retryAt,'Chat limit reached. Try again after the indicated wait.');
       if(error instanceof ChatPdfError)return send(res,400,{error:error.message});

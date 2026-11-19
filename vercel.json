@@ -2,7 +2,7 @@
   "version": 2,
   "functions": {
     "api/golden-standards.js": {"maxDuration": 120},
-    "api/chat.js": {"maxDuration": 120}
+    "api/chat.js": {"maxDuration": 120, "includeFiles": "{api/_chat_pdf_worker.js,node_modules/docx-to-pdf-wasm/build/docx-to-pdf.wasm}"}
   },
   "rewrites": [
     {"source": "/chat", "destination": "/api/chat"},
