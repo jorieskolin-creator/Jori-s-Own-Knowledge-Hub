@@ -38,15 +38,18 @@ function request(handler,action,method='GET',{cookie='',origin='https://example.
   const headers={cookie,origin,host:'example.test','content-type':'application/json','x-vercel-forwarded-for':'192.0.2.5'};
   return Promise.resolve(handler({headers,method,body:{password},query:{action}},res)).then(()=>res);
 }
-test('Chat disabled by default, rejects cross-origin and revokes sessions on logout',async()=>{
-  assert.equal((await request(createHandler(),'shell')).statusCode,404);
-  const handler=createHandler({state:memoryState(),enabled:()=>true});
+test('Chat uses the existing configured password, rejects cross-origin requests and revokes sessions on logout',async()=>{
+  const handler=createHandler({state:memoryState()});
+  const shell=await request(handler,'shell');
+  assert.equal(shell.statusCode,200);
+  assert.match(shell.payload,/Answers use approved public sources/);
+  assert.equal((await request(handler,'probe','POST')).statusCode,404);
   assert.equal((await request(handler,'login','POST',{origin:'https://other.test',password:'synthetic-password'})).statusCode,403);
   const logged=await request(handler,'login','POST',{password:'synthetic-password'});
   assert.equal(logged.statusCode,200);
   assert.match(logged.headers['set-cookie'],/^__Host-kh_chat=.*HttpOnly; Secure; SameSite=Strict/);
   const cookie=logged.headers['set-cookie'].split(';')[0];
-  assert.deepEqual((await request(handler,'session','GET',{cookie})).payload,{authenticated:true,pdfs:false,word:false});
+  assert.deepEqual((await request(handler,'session','GET',{cookie})).payload,{authenticated:true,pdfs:false,word:true});
   assert.equal((await request(handler,'session','GET',{cookie:'__Host-kh_admin='+sign('admin',1)})).payload.authenticated,false);
   assert.equal((await request(handler,'session','GET',{cookie:cookie.slice(0,-1)+'#'})).payload.authenticated,false);
   for(const [file,method] of [['documents','GET'],['master-table','GET'],['view','GET'],['private-document','GET'],['initialize-folders','POST']]){
@@ -63,17 +66,10 @@ test('Login throttles failed attempts and missing credentials fail closed',async
   assert.equal((await request(handler,'login','POST',{password:'synthetic-password'})).statusCode,429);
   const pass=process.env.FULL_ACCESS_CHAT_PASSWORD;
   delete process.env.FULL_ACCESS_CHAT_PASSWORD;
-  try{assert.equal((await request(handler,'session')).statusCode,503);}
+  try{
+    assert.equal((await request(createHandler(),'shell')).statusCode,404);
+    assert.equal((await request(handler,'session')).statusCode,503);
+  }
   finally{process.env.FULL_ACCESS_CHAT_PASSWORD=pass;}
 });
 module.exports={memoryState,request};
-
-test('The live readiness probe requires its scoped token before doing any work',async()=>{
-  const {authorized}=require('../api/_chat_probe');
-  const secret='a'.repeat(64);
-  const now=1000000;
-  const req={method:'POST',headers:{'x-chat-test-probe':secret}};
-  assert.equal(authorized(req,{CHAT_TEST_PROBE:secret+':'+(now+60000)},now),true);
-  assert.equal(authorized(req,{CHAT_TEST_PROBE:secret+':'+now},now),false);
-  assert.equal(authorized({...req,headers:{}},{CHAT_TEST_PROBE:secret+':'+(now+60000)},now),false);
-});
