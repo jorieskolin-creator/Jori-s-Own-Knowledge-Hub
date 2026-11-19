@@ -21,7 +21,8 @@ test('Personal never enters either Chat inventory or an explicit source read',as
     headBlob:async pathname=>({...current.get(pathname),etag:'fixed'}),
     readBlob:async(pathname,{access,useCache})=>{
       accesses.push([pathname,access]);assert.equal(useCache,false);
-      return {statusCode:200,blob:{etag:'fixed'},stream:new Blob([html]).stream()};
+      const text=access==='public'?html:html.replace('distinct','separate');
+      return {statusCode:200,blob:{etag:'fixed'},stream:new Blob([text]).stream()};
     },
     readPublication:async()=>({table:{records:all,published_records:published,publication:{status:'Approved'}}})
   });
@@ -44,6 +45,41 @@ test('Personal never enters either Chat inventory or an explicit source read',as
 test('Chat derives a bounded lexical query from the question',()=>{
   assert.equal(retrievalQuery('How is the governance organised?'),'governance organised');
   assert.ok(retrievalQuery('abc '.repeat(25)+'x'.repeat(110)).length<200);
+});
+
+test('Chat continues past a first batch with little usable governance evidence',async()=>{
+  const corpus=new Map();
+  for(let i=1;i<=4;i++){
+    corpus.set(`01-solutions/ai-governance-steps-controls-${i}.html`,{
+      title:`AI Governance Steps Controls ${i}`,key_terms:['AI Governance Steps Controls'],
+      text:'<p>AI Governance steps and controls. Contact Jane Placeholder at jane@example.test.</p>'
+    });
+  }
+  const procedure='02-frameworks/governance-practice.html';
+  corpus.set(procedure,{title:'AI Governance practice',key_terms:['AI Governance'],
+    text:'<p>AI Governance requires explicit responsibilities. The reviewer records the evidence before approval.</p>'});
+  const blobs=[...corpus].map(([pathname,{text}])=>({pathname,uploadedAt:dated,size:Buffer.byteLength(text)}));
+  const records=blobs.map(blob=>{
+    const {title,key_terms}=corpus.get(blob.pathname);
+    return {...entryFromDoc(metadata(blob,'public')),title,key_terms,review_status:'Approved'};
+  });
+  const opened=[];
+  const chat=createChatEvidence({
+    publicOnly:true,
+    list:async()=>({blobs}),
+    headBlob:async pathname=>({...blobs.find(blob=>blob.pathname===pathname),etag:'version'}),
+    readBlob:async pathname=>{
+      opened.push(pathname);
+      return {statusCode:200,blob:{etag:'version'},stream:new Blob([corpus.get(pathname).text]).stream()};
+    },
+    readPublication:async()=>({table:{records,published_records:records,publication:{status:'Approved'}}})
+  });
+  const answer=await chat.acquire('How to build good AI Governance?');
+  assert.equal(opened.length,5);
+  assert.equal(opened.at(-1),procedure);
+  assert.equal(answer.passages.length,1);
+  assert.match(answer.passages[0].text,/records the evidence/);
+  assert.equal(answer.passages[0].ref,'H1');
 });
 
 test('Public test scope never lists, opens, or returns Private sources',async()=>{

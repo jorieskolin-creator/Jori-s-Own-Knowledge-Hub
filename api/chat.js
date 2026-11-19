@@ -79,7 +79,7 @@ function createHandler({state=createState(),enabled=()=>Boolean(process.env.FULL
       if((await models.moderate([question],new Set(['question'])))[0])throw new ChatPolicy();
       const attachments=multipart&&body.files.length?await extractAttachments(body.files,question,signal):{passages:[],incomplete:false};
       const hub=evidenceFor({publicOnly:publicScope});
-      const evidence=await hub.acquire(question);
+      const evidence=await hub.acquire(question,{signal});
       if(publicScope&&evidence.passages.some(p=>p.access!=='public'))throw new ChatPolicy();
       const result=await makeAnswer({question,evidence:{...evidence,limited:evidence.limited||attachments.incomplete},
         hub,attachments:attachments.passages,models,

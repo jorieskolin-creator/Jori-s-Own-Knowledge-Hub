@@ -65,11 +65,12 @@ function pick(ranked,config,budget){
  }
  return {passages:selected,remaining_character_budget:budget};
 }
-async function assembleEvidence(args,docs,openFile){
+async function assembleEvidence(args,docs,openFile,{deadline=Infinity}={}){
  const req=validateRequest(args),config=MODES[req.mode];
  if(!Array.isArray(docs)||docs.length!==req.ids.length||typeof openFile!=='function')
   throw Error('Authorized document list required');
- const sources=[],candidates=[],failures=[],deadline=Date.now()+TIME_BUDGET_MS;
+ const sources=[],candidates=[],failures=[];
+ deadline=Math.min(deadline,Date.now()+TIME_BUDGET_MS);
  for(let i=0;i<docs.length;i++){
   const doc=docs[i];
   if(doc.id!==req.ids[i])throw Error('Document scope mismatch');
