@@ -11,5 +11,10 @@
     "docx-to-pdf-wasm": "0.1.0",
     "pdf-lib": "1.17.1",
     "pdf2json": "4.1.0"
+  },
+  "overrides": {
+    "@vercel/cli-config": {
+      "zod": "4.6.7"
+    }
   }
 }

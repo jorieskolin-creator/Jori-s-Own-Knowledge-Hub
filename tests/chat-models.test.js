@@ -58,3 +58,20 @@ test('Unknown refs, document copying, and unverified claims do not reach release
   const result=await testAnswer(models('The reviewer missed the deadline.'));
   assert.equal(result.status,'unknown');
 });
+test('Gemini Developer API is explicitly selected and rejects ineligible data before egress',async()=>{
+  const config={CHAT_GEMINI_ENABLED:'true',CHAT_GEMINI_ROUTE:'developer-api',CHAT_GEMINI_CLASSES:'question,public',GEMINI_API_KEY:'synthetic'};
+  let sent=0;
+  const model=createModels({env:config,fetcher:async(url,options)=>{
+    sent++;
+    assert.equal(url,'https://generativelanguage.googleapis.com/v1beta/models/'+FALLBACK+':generateContent');
+    assert.equal(options.headers['x-goog-api-key'],'synthetic');
+    assert.doesNotMatch(url,/synthetic/);
+    assert.ok(Buffer.byteLength(options.body)<=3500);
+    return Response.json({candidates:[{finishReason:'STOP',content:{parts:[{text:'{"supported":true}'}]}}]});
+  }});
+  await assert.rejects(()=>model.ask(FALLBACK,'chat_verification','test',{}, {},new Set(['private'])),ModelUnavailable);
+  await assert.rejects(()=>model.ask(FALLBACK,'chat_verification','test',{text:'a'.repeat(4000)}, {},new Set(['public'])),ModelUnavailable);
+  assert.equal(sent,0);
+  assert.deepEqual(await model.ask(FALLBACK,'chat_verification','test',{}, {},new Set(['question','public'])),{supported:true});
+  assert.equal(sent,1);
+});

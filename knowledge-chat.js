@@ -67,6 +67,7 @@ function showAnswer(asked,result){
   insert(article,'h2',asked);
   if(result.status==='answer'){
     for(const claim of result.claims)insert(article,'p',claim.text+' ['+claim.refs.join(', ')+']');
+    if(result.partial)insert(article,'p','Unknown from available evidence.');
     const details=insert(article,'details','');
     insert(details,'summary','Evidence');
     const list=insert(details,'ul','');
@@ -118,6 +119,7 @@ questionForm.addEventListener('submit',async event=>{
   statusMessage.textContent='Checking the evidence…';
   try{
     const result=await chatRequest('answer',payload,pending.signal);
+    if(pending.signal.aborted||workspace.hidden)return;
     if(result.report){
       const url=URL.createObjectURL(result.report);
       const link=document.createElement('a');
