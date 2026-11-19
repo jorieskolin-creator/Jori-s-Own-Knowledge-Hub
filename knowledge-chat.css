@@ -1,0 +1,23 @@
+:root{font:16px/1.5 system-ui,sans-serif;color:#182b3d;background:#f2f6f4;color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0}
+main{max-width:48rem;margin:clamp(1rem,6vh,4rem) auto;padding:clamp(1rem,4vw,2rem)}
+header{display:flex;align-items:center;justify-content:space-between;gap:1rem;border-bottom:1px solid #cbdad2;padding-bottom:1rem;margin-bottom:1.5rem}
+h1{font-size:clamp(1.65rem,4vw,2.5rem);line-height:1.1;margin:0;letter-spacing:-.035em}
+h2{font-size:1.05rem;margin:0 0 .75rem}
+button,input,textarea{font:inherit}
+button{border:1px solid #afc4bb;background:white;color:#17382f;border-radius:.55rem;padding:.55rem .85rem;cursor:pointer}
+button.primary{display:block;background:#185748;color:white;border-color:#185748;margin-top:.65rem}
+button:disabled{opacity:.7;cursor:wait}
+textarea,#chat-password{width:100%;border:1px solid #a9c1b6;border-radius:.55rem;background:white;padding:.7rem;color:#182b3d;margin-top:.3rem}
+textarea{resize:vertical}
+label{display:block;font-weight:600}
+[hidden]{display:none!important}
+.login-fields{display:flex;align-items:baseline;gap:.65rem;max-width:34rem}
+.hint{color:#415b52;font-size:.9rem;margin:.3rem 0 .65rem}
+article{background:white;border:1px solid #cbdad2;border-radius:.8rem;margin-top:1rem;padding:1rem 1.15rem}
+article p{white-space:pre-wrap;overflow-wrap:anywhere;margin:.55rem 0}
+article details{margin-top:.75rem}
+article summary{cursor:pointer;font-weight:600}
+#chat-status{color:#6a3422;min-height:1.5rem}
+:focus-visible{outline:3px solid #19745d;outline-offset:2px}
