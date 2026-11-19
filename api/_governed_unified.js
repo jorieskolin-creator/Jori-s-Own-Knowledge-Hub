@@ -49,6 +49,7 @@ function createService(deps={}){
  const masterCall=deps.readMaster||readMaster;
  const discoverCall=deps.discover||discover;
  const assembleCall=deps.assembleEvidence||assembleEvidence;
+ const allowedPath=path=>permitted(path)&&(!deps.allowPath||deps.allowPath(path));
 
  async function enumerate(scope){
   if(!SCOPES.includes(scope))throw Error('Invalid source scope');
@@ -57,7 +58,7 @@ function createService(deps={}){
    if(++rounds>100)throw Error('Document inventory pagination limit');
    const r=await inventoryCall({storeId:stores[scope](),limit:1000,...(cursor?{cursor}:{})});
    if(!r||!Array.isArray(r.blobs))throw Error('Document inventory unavailable');
-   all.push(...r.blobs.filter(b=>permitted(b.pathname)).map(b=>metadata(b,scope)));
+   all.push(...r.blobs.filter(b=>allowedPath(b.pathname)).map(b=>metadata(b,scope)));
    cursor=r.hasMore?r.cursor:null;
    if(r.hasMore&&!cursor)throw Error('Document inventory cursor unavailable');
   }while(cursor);
@@ -72,15 +73,15 @@ function createService(deps={}){
   return approval.authorizedCatalog(docs,masterCall);
  }
  async function open(doc){
-  if(!doc||!SCOPES.includes(doc.access)||doc.id!==doc.access+':'+doc.pathname||!permitted(doc.pathname))
+  if(!doc||!SCOPES.includes(doc.access)||doc.id!==doc.access+':'+doc.pathname||!allowedPath(doc.pathname))
    throw Error('Invalid source authorization');
   await approval.requireApprovedSource(doc,masterCall);
-  return sourceCall(doc.pathname,{access:doc.access,storeId:stores[doc.access]()});
+  return sourceCall(doc.pathname,{access:doc.access,storeId:stores[doc.access]()},doc);
  }
  function scopedDocuments(ids,docs){
   const indexed=new Map(docs.map(d=>[d.id,d]));
   if(ids.some(id=>typeof id!=='string'||!(/^(?:public|private):/).test(id)||
-     !permitted(id.slice(id.indexOf(':')+1))))throw new SourceAccessError('Invalid source ID or path');
+     !allowedPath(id.slice(id.indexOf(':')+1))))throw new SourceAccessError('Invalid source ID or path');
   const selected=ids.map(id=>indexed.get(id));
   if(selected.some(d=>!d))throw new SourceAccessError('Source ID outside current authorized catalog');
   return selected;

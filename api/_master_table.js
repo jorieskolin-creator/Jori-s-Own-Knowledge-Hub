@@ -202,7 +202,15 @@ async function readBytes(file,limit){
  for await(const p of Readable.fromWeb(file.stream)){n+=p.length;if(n>limit)throw Error('Master Table exceeds size limit');parts.push(p);}
  return Buffer.concat(parts).toString('utf8');
 }
-async function readMaster(){
+async function readMaster({fresh=false}={}){
+ if(fresh){
+  const file=await get(MASTER_PATH,{access:'private',storeId:STORE_ID(),useCache:false});
+  if(!file)return {table:masterEmpty(),etag:null};
+  if(file.statusCode!==200||!file.stream||!file.blob?.etag)throw Error('Master Table could not be read');
+  const table=JSON.parse(await readBytes(file,MAX_MASTER_BYTES));
+  if(table.schema_version!==1||!Array.isArray(table.records))throw Error('Unsupported Master Table schema');
+  return {table:withPublication(table),etag:file.blob.etag};
+ }
  const storeId=STORE_ID();
  let info;try{info=await head(MASTER_PATH,{storeId});}catch(e){
   if(/not.?found|404|does not exist/i.test(String(e?.message||'')))return {table:masterEmpty(),etag:null};
