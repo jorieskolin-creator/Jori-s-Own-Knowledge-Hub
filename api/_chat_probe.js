@@ -32,7 +32,8 @@ async function runChatProbe(req,res,env=process.env,services={}){
         'Chat output incomplete':'incomplete_output'
       };
       checks[name]=Number.isInteger(error?.upstreamStatus)?'upstream_'+error.upstreamStatus:
-        error instanceof ChatPolicy?'policy_blocked':Object.hasOwn(known,error?.message)?known[error.message]:'failed';
+        error instanceof ChatPolicy?(['answer_identifier','verbatim','answer_moderation','verbatim_budget'].includes(error.reason)
+          ?'policy_'+error.reason:'policy_blocked'):Object.hasOwn(known,error?.message)?known[error.message]:'failed';
     }
   }
   const classes=new Set(['question']);
