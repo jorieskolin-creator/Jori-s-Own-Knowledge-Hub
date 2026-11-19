@@ -46,7 +46,7 @@ test('Chat disabled by default, rejects cross-origin and revokes sessions on log
   assert.equal(logged.statusCode,200);
   assert.match(logged.headers['set-cookie'],/^__Host-kh_chat=.*HttpOnly; Secure; SameSite=Strict/);
   const cookie=logged.headers['set-cookie'].split(';')[0];
-  assert.deepEqual((await request(handler,'session','GET',{cookie})).payload,{authenticated:true,pdfs:false});
+  assert.deepEqual((await request(handler,'session','GET',{cookie})).payload,{authenticated:true,pdfs:false,word:false});
   assert.equal((await request(handler,'session','GET',{cookie:'__Host-kh_admin='+sign('admin',1)})).payload.authenticated,false);
   assert.equal((await request(handler,'session','GET',{cookie:cookie.slice(0,-1)+'#'})).payload.authenticated,false);
   for(const [file,method] of [['documents','GET'],['master-table','GET'],['view','GET'],['private-document','GET'],['initialize-folders','POST']]){

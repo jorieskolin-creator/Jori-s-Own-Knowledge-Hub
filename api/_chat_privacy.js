@@ -3,7 +3,7 @@ const CONTACT=/(?:https?:\/\/|www\.|[\w.+-]+@[\w.-]+\.[a-z]{2,}|\b[\p{L}\p{N}-]+
 const SECRETS=/(?:\b(?:sk-[\w-]{12,}|gh[pousr]_[\w]{12,}|eyJ[\w-]{20,}|AKIA[A-Z0-9]{16})\b|-----BEGIN [A-Z ]+PRIVATE KEY-----|\b(?:api.?key|password|secret|token|salasana)\s*[:=]\s*\S{4,})/iu;
 const IDENTIFIER=/(?:\+\d[\d ().-]{7,}\d|\b\d{9,}\b|\b\d{6}[+A-]\d{3}[0-9A-Z]\b|\b[A-Z]{2}\d{2}[A-Z0-9]{12,}\b)/u;
 const ENTITY_PAIR=/\b\p{Lu}\p{Ll}{1,}(?:[’'-]\p{Lu}?\p{Ll}+)?[ \t]+\p{Lu}\p{Ll}{1,}\b/gu;
-const ENTITY_SUFFIX=/(?:^|\W)[\p{L}\p{N}._-]+\s+(?:oyj?|abp?|ltd|inc|llc|corp|gmbh|plc|limited)\b/iu;
+const ENTITY_SUFFIX=/(?:^|\W)[\p{L}\p{N}._-]+\s+(?:oyj?|abp?|ltd|inc|llc|corp|gmbh|plc)\b/iu;
 const PROPER_WORD=/\b(?:[\p{Lu}][\p{Ll}]{2,}|[\p{Ll}]+[\p{Lu}][\p{L}]+|[\p{Lu}]{3,})\b/gu;
 const SAFE_WORDS=new Set('AI API AWS CO2 CSCF CSV DOCX EU EUC GDPR HTML ICT IT JSON KPI LLM LZ MCP OCR PDF PII PR RFP SaaS SecOps SRE TTL URL UX FinOps GenAI DevOps Knowledge Hub Generate Ground Govern Level Landing Zone Public Private Word Microsoft Azure'.split(' '));
 const RECONSTRUCTION=/(?:\b(?:verbatim|word.for.word|entire (?:file|document|source)|full (?:file|document|text|source)|(?:next|previous) (?:page|paragraph|section)|(?:reproduce|transcribe|copy|dump) (?:the |that |this )?(?:file|document|source|text|section))\b|\b(?:sanasta sanaan|koko asiakirja|koko dokumentti|seuraava sivu)\b)/iu;

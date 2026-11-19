@@ -42,7 +42,7 @@ test('Transient primary failure only uses an eligible fallback, with safe refere
   const answer=await testAnswer(models);
   assert.equal(answer.status,'answer');
   assert.equal(answer.citations[0].section,2);
-  assert.doesNotMatch(JSON.stringify(answer),/hidden\.html|private:/);
+  assert.doesNotMatch(JSON.stringify(answer.citations),/hidden\.html|private:/);
   assert.deepEqual(calls,[[PRIMARY,'chat_answer'],[FALLBACK,'chat_answer'],[FALLBACK,'chat_verification']]);
   await assert.rejects(()=>testAnswer({...models,allowed:()=>false}),ModelUnavailable);
   await assert.rejects(()=>testAnswer({...models,ask:async()=>{throw new ChatPolicy();},

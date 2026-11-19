@@ -115,6 +115,7 @@ async function makeAnswer({question,evidence,hub,attachments=[],models,key,befor
   await hub.assertCurrent(used.filter(p=>p.access!=='attachment'));
   const citations=used.map(p=>({ref:p.ref,label:p.access==='attachment'?p.source:sourceLabel(p.source,key),
     page:Number.isSafeInteger(p.page)?p.page:null,section:Number.isSafeInteger(p.section)?p.section:null}));
-  return {status:'answer',claims,citations,limited:limited||selected.passages.length<supplied.length};
+  return {status:'answer',claims,citations,sourceChecks:used.filter(p=>p.access!=='attachment').map(({source,hash})=>({source,hash})),
+    limited:limited||selected.passages.length<supplied.length};
 }
 module.exports={makeAnswer,checkedClaims,UNKNOWN};

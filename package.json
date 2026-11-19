@@ -7,6 +7,9 @@
   },
   "dependencies": {
     "@vercel/blob": "^2.3.0",
+    "docx": "9.5.1",
+    "docx-to-pdf-wasm": "0.1.0",
+    "pdf-lib": "1.17.1",
     "pdf2json": "4.1.0"
   }
 }
