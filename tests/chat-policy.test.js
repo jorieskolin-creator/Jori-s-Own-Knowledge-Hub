@@ -15,6 +15,18 @@ test('Privacy screen blocks seeded names, secrets, document reconstruction and p
   assert.deepEqual(screenPassages([{ref:'H1',text:'Contact Jane Placeholder.'},{ref:'H2',text:'The reviewer checks the evidence.'}]),
     [{ref:'H2',text:'The reviewer checks the evidence.'}]);
 });
+test('Governance terminology is allowed in questions, passages and answers',()=>{
+  for(const value of ['What is AI Governance?', 'Explain Data Governance.', 'Compare Cloud Governance and Model Governance.']){
+    assert.equal(screenQuestion(value,'chat'),value);
+  }
+  const passage={ref:'H1',text:'AI Governance assigns decision authority and sets review requirements.'};
+  assert.deepEqual(screenPassages([passage]),[passage]);
+  assert.equal(screenAnswer(passage.text),passage.text);
+  for(const value of ['What does Jane Placeholder do in AI Governance?', 'What does Example Cloud offer?',
+    'What does AI Governance Oy offer?', 'What did Acme Data Governance publish?']){
+    assert.throws(()=>screenQuestion(value,'chat'),{reason:'question_identifier'},value);
+  }
+});
 test('Concurrent acceptance reserves one session slot and charges the shared daily budget',async()=>{
   const stateData={'session:test':{until:Date.now()+60000}};
   const session={id:'test',exp:stateData['session:test'].until};
