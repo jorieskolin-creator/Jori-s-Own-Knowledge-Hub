@@ -27,9 +27,9 @@ async function unchanged(path,storeId,doc,headBlob){
     new Date(info.uploadedAt).getTime()!==new Date(doc.updated).getTime())throw Error('Chat source changed');
   return info.etag;
 }
-function createChatEvidence({list,readBlob=get,headBlob=head,readPublication=()=>readMaster({fresh:true})}={}){
+function createChatEvidence({publicOnly=false,list,readBlob=get,headBlob=head,readPublication=()=>readMaster({fresh:true})}={}){
   const versions=new Map(); // Per request. Never shared between users.
-  const service=createService({list,readMaster:readPublication,allowPath:chatPath,get:async(path,opts,doc)=>{
+  const service=createService({list,publicOnly,readMaster:readPublication,allowPath:chatPath,get:async(path,opts,doc)=>{
     const etag=await unchanged(path,opts.storeId,doc,headBlob);
     const file=await readBlob(path,{...opts,useCache:false});
     if(file?.statusCode!==200||file.blob?.etag!==etag)throw Error('Chat source changed');
@@ -44,7 +44,7 @@ function createChatEvidence({list,readBlob=get,headBlob=head,readPublication=()=
     await Promise.all([...ids].map(async id=>{
       const version=versions.get(id);
       const record=index.get(id);
-      if(!version||!record||!chatPath(record.pathname)||record.source_signature!==sourceSignature(version.doc)||
+      if(!version||!record||!chatPath(record.pathname)||(publicOnly&&record.access!=='public')||record.source_signature!==sourceSignature(version.doc)||
         (record.source_hash&&passages.some(p=>p.source===id&&p.hash!==record.source_hash)))
         throw Error('Chat source no longer approved');
       if(await unchanged(version.doc.pathname,version.storeId,version.doc,headBlob)!==version.etag)
@@ -58,7 +58,7 @@ function createChatEvidence({list,readBlob=get,headBlob=head,readPublication=()=
     if(result.delivery_status==='BLOCKED'||result.evidence?.failures?.length)
       throw Error('Chat retrieval failed');
     const passages=(result.evidence?.passages||[]).map((p,i)=>{
-      if(!chatPath(p.pathname)||p.id!==p.access+':'+p.pathname||!['public','private'].includes(p.access)||!versions.has(p.id))
+      if(!chatPath(p.pathname)||p.id!==p.access+':'+p.pathname||!(publicOnly?['public']:['public','private']).includes(p.access)||!versions.has(p.id))
         throw Error('Unexpected chat passage scope');
       return {ref:'H'+(i+1),source:p.id,hash:p.source_sha256,access:p.access,
         page:p.page,section:p.section,text:p.passage};

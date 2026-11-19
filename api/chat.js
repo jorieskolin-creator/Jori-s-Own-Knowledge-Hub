@@ -9,8 +9,9 @@ const {createModels,ModelUnavailable}=require('./_chat_models');
 const {makeAnswer}=require('./_chat_answer');
 const {readUpload,attachmentEvidence,ChatPdfError}=require('./_chat_pdf');
 const {createReport,MIME}=require('./_chat_report');
+const {runChatProbe}=require('./_chat_probe');
 
-function chatShell(res){
+function chatShell(res,publicOnly){
   res.setHeader('Cache-Control','private, no-store, max-age=0');
   res.setHeader('Content-Type','text/html; charset=utf-8');
   res.setHeader('X-Content-Type-Options','nosniff');
@@ -21,6 +22,7 @@ function chatShell(res){
 <meta name="robots" content="noindex, nofollow"><title>Ask Knowledge Hub</title>
 <link rel="stylesheet" href="/knowledge-chat.css"><script src="/knowledge-chat.js" defer></script></head>
 <body><main><header><h1>Ask Knowledge Hub</h1><button id="chat-logout" type="button" hidden>Sign out</button></header>
+${publicOnly?'<p class="hint">Public-source testing. Use public or synthetic information in your questions.</p>':''}
 <form id="chat-login" hidden><label for="chat-password">Chat password</label>
 <div class="login-fields"><input id="chat-password" type="password" required maxlength="1024" autocomplete="current-password"><button class="primary">Sign in</button></div></form>
 <section id="chat-workspace" hidden>
@@ -42,6 +44,7 @@ function jsonBody(req){
 }
 function createHandler({state=createState(),enabled=()=>process.env.KNOWLEDGE_HUB_CHAT_ENABLED==='true',
   evidenceFor=createChatEvidence,modelsFor=createModels,
+  publicOnly=()=>process.env.CHAT_EVIDENCE_SCOPE==='public',
   pdfEnabled=()=>process.env.KNOWLEDGE_HUB_CHAT_PDF_ENABLED==='true',extractAttachments=attachmentEvidence,
   wordEnabled=()=>process.env.KNOWLEDGE_HUB_CHAT_WORD_ENABLED==='true',reportFor=createReport}={}){
   function retry(res,at,message){
@@ -64,7 +67,8 @@ function createHandler({state=createState(),enabled=()=>process.env.KNOWLEDGE_HU
     };
     try{
       const multipart=/^multipart\/form-data/i.test(req.headers['content-type']||'');
-      if(multipart&&!pdfEnabled())return send(res,415,{error:'PDF attachments are unavailable'});
+      const publicTest=publicOnly();
+      if(multipart&&(publicTest||!pdfEnabled()))return send(res,415,{error:'PDF attachments are unavailable'});
       if(!multipart&&!/^application\/json(?:;|$)/i.test(req.headers['content-type']||''))
         return send(res,415,{error:'Send a JSON request'});
       const body=multipart?await readUpload(req):jsonBody(req);
@@ -75,8 +79,9 @@ function createHandler({state=createState(),enabled=()=>process.env.KNOWLEDGE_HU
       await stillSignedIn();
       if((await models.moderate([question],new Set(['question'])))[0])throw new ChatPolicy();
       const attachments=multipart&&body.files.length?await extractAttachments(body.files,question,signal):{passages:[],incomplete:false};
-      const hub=evidenceFor();
+      const hub=evidenceFor({publicOnly:publicTest});
       const evidence=await hub.acquire(question);
+      if(publicTest&&evidence.passages.some(p=>p.access!=='public'))throw new ChatPolicy();
       const result=await makeAnswer({question,evidence:{...evidence,limited:evidence.limited||attachments.incomplete},
         hub,attachments:attachments.passages,models,
         key:config.key,beforeEgress:stillSignedIn});
@@ -104,17 +109,18 @@ function createHandler({state=createState(),enabled=()=>process.env.KNOWLEDGE_HU
     }
   }
   return async function(req,res){
-    if(!enabled())return send(res,404,{error:'Chat unavailable'});
     const action=req.query?.action||'shell';
+    if(action==='probe')return runChatProbe(req,res);
+    if(!enabled())return send(res,404,{error:'Chat unavailable'});
     if(!['shell','session','login','logout','answer'].includes(action))return send(res,404,{error:'Chat operation unavailable'});
     if(req.method!==(['shell','session'].includes(action)?'GET':'POST'))return send(res,405,{error:'Method not allowed'});
     if(req.method==='POST'&&!auth.isSameOrigin(req))return send(res,403,{error:'Invalid request origin'});
     try{
       const config=auth.protectedConfig();
-      if(action==='shell')return chatShell(res);
+      if(action==='shell')return chatShell(res,publicOnly());
       if(action==='session'){
         const active=await auth.activeSession(req,state,config.key);
-        return send(res,200,{authenticated:Boolean(active),pdfs:Boolean(active)&&pdfEnabled(),word:Boolean(active)&&wordEnabled()});
+        return send(res,200,{authenticated:Boolean(active),pdfs:Boolean(active)&&!publicOnly()&&pdfEnabled(),word:Boolean(active)&&wordEnabled()});
       }
       if(action==='logout'){
         await auth.logout(req,state,config.key);
@@ -129,7 +135,7 @@ function createHandler({state=createState(),enabled=()=>process.env.KNOWLEDGE_HU
       if(result.retryAt)return retry(res,result.retryAt,'Too many sign-in attempts');
       if(!result.token)return send(res,401,{error:'Invalid chat password'});
       res.setHeader('Set-Cookie',auth.cookie(result.token,auth.SESSION_MS/1000));
-      return send(res,200,{authenticated:true,pdfs:pdfEnabled(),word:wordEnabled()});
+      return send(res,200,{authenticated:true,pdfs:!publicOnly()&&pdfEnabled(),word:wordEnabled()});
     }catch(error){
       if(error instanceof ChatLimit)return retry(res,error.retryAt,'Chat limit reached. Try again after the indicated wait.');
       if(error instanceof ChatPdfError)return send(res,400,{error:error.message});

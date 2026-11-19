@@ -45,3 +45,26 @@ test('Chat derives a bounded lexical query from the question',()=>{
   assert.equal(retrievalQuery('How is the governance organised?'),'governance organised');
   assert.ok(retrievalQuery('abc '.repeat(25)+'x'.repeat(110)).length<200);
 });
+
+test('Public test scope never lists, opens, or returns Private sources',async()=>{
+  const listed=[];
+  const blob={pathname:visible,uploadedAt:dated,size:Buffer.byteLength(html)};
+  const records=['public','private'].map(access=>({...entryFromDoc(metadata(blob,access)),review_status:'Approved'}));
+  const evidence=createChatEvidence({
+    publicOnly:true,
+    list:async({storeId})=>{listed.push(storeId);return {blobs:[blob]};},
+    headBlob:async()=>({...blob,etag:'fixture'}),
+    readBlob:async(_path,{access})=>{
+      assert.equal(access,'public');
+      return {statusCode:200,blob:{etag:'fixture'},stream:new Blob([html]).stream()};
+    },
+    readPublication:async()=>({table:{records,published_records:records,publication:{status:'Approved'}}})
+  });
+  const result=await evidence.acquire('What does the governance require?');
+  assert.ok(result.passages.length);
+  assert.ok(result.passages.every(p=>p.access==='public'));
+  await assert.rejects(()=>evidence.service.retrieve({query:'governance',ids:['private:'+visible]}),/authorized catalog/);
+  assert.ok(listed.length>0);
+  assert.equal(new Set(listed).size,1);
+  assert.equal(listed[0],process.env.PUBLIC_BLOB_STORE_ID||process.env.BLOB_STORE_ID||'store_6mg9Vu2ypJJMAwV3');
+});
