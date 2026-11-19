@@ -115,10 +115,11 @@ function createService(deps={}){
     'Discovery examined Public sources. Relevance ranking is lexical and semantic recall is not verified.'])]
   });
  }
- async function retrieve(args){
-  const request=validateRequest(args),docs=await catalog();
+ async function retrieve(args,{docs,deadline}={}){
+  const request=validateRequest(args);
+  docs??=await catalog();
   const selected=scopedDocuments(request.ids,docs);
-  return governed.releasePackage(await assembleCall(request,selected,open));
+  return governed.releasePackage(await assembleCall(request,selected,open,{deadline}));
  }
  async function verify(args){
   const request=validateRequest(args),docs=await catalog();

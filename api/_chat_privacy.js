@@ -2,6 +2,7 @@
 const CONTACT=/(?:https?:\/\/|www\.|[\w.+-]+@[\w.-]+\.[a-z]{2,}|\b[\p{L}\p{N}-]+\.(?:com|org|net|fi|io|cloud|onmicrosoft\.com)\b)/iu;
 const SECRETS=/(?:\b(?:sk-[\w-]{12,}|gh[pousr]_[\w]{12,}|eyJ[\w-]{20,}|AKIA[A-Z0-9]{16})\b|-----BEGIN [A-Z ]+PRIVATE KEY-----|\b(?:api.?key|password|secret|token|salasana)\s*[:=]\s*\S{4,})/iu;
 const IDENTIFIER=/(?:\+\d[\d ().-]{7,}\d|\b\d{9,}\b|\b\d{6}[+A-]\d{3}[0-9A-Z]\b|\b[A-Z]{2}\d{2}[A-Z0-9]{12,}\b)/u;
+const INTERNAL_REFERENCE=/\b(?:src|doc|chunk)-\d{2,}(?:-[a-z]*\d+)*\b/iu;
 const ENTITY_PAIR=/(?<![\p{L}\p{N}_])\p{Lu}\p{Ll}{1,}(?:[’'-]\p{Lu}?\p{Ll}+)?[ \t]+\p{Lu}\p{Ll}{1,}(?![\p{L}\p{N}_])/gu;
 const ENTITY_SUFFIX=/(?:^|\W)[\p{L}\p{N}._-]+\s+(?:oyj?|abp?|ltd|inc|llc|corp|gmbh|plc)\b/iu;
 const PROPER_WORD=/(?<![\p{L}\p{N}_])(?:[\p{Lu}][\p{Ll}]{2,}|[\p{Ll}]+[\p{Lu}][\p{L}]+|[\p{Lu}]{3,})(?![\p{L}\p{N}_])/gu;
@@ -10,6 +11,9 @@ const FRAMEWORK_PREFIXES=new Set(['At','For','From','In','To','With','Compare','
 const SOURCE_POINTER=/(?:\b(?:public|private):|(?:^|\s)[\w.%/-]+\.(?:pdf|html?|docx)\b|\b06-personal\b)/iu;
 const RECONSTRUCTION=/(?:\b(?:verbatim|word.for.word|entire (?:file|document|source)|full (?:file|document|text|source)|(?:next|previous) (?:page|paragraph|section)|(?:reproduce|transcribe|copy|dump) (?:the |that |this )?(?:file|document|source|text|section))\b|\b(?:sanasta sanaan|koko asiakirja|koko dokumentti|seuraava sivu)\b)/iu;
 const OVERRIDE=/(?:ignore|override|reveal|disregard|ohita|paljasta)\s+(?:all |the |your |aiemmat )?(?:previous instructions|system prompt|developer instructions|safety rules|aiemmat ohjeet|järjestelmäohjeet)/iu;
+const SENTENCES=new Intl.Segmenter('en',{granularity:'sentence'});
+const GENERIC_SUBJECTS=new Set('A An After Before Both Each Every If In It Once Only Review That The These They This Those Use When Where While Without'.split(' '));
+const DEPENDENT_SUBJECTS=new Set(['It','That','These','They','This','Those']);
 class ChatPolicy extends Error{
   constructor(reason){super('This request or answer could not be released under the Chat rules');this.reason=reason;}
 }
@@ -25,7 +29,7 @@ function deniedTerms(){
 function explicitIdentifier(text,terms=deniedTerms()){
   const value=normalized(text);
   const lower=value.toLowerCase();
-  return CONTACT.test(value)||SOURCE_POINTER.test(value)||SECRETS.test(value)||IDENTIFIER.test(value)||ENTITY_SUFFIX.test(value)||
+  return CONTACT.test(value)||SOURCE_POINTER.test(value)||SECRETS.test(value)||IDENTIFIER.test(value)||INTERNAL_REFERENCE.test(value)||ENTITY_SUFFIX.test(value)||
     terms.some(term=>lower.includes(term))||
     [...value.matchAll(ENTITY_PAIR)].some(match=>{
       const [first,second]=match[0].split(/\s+/);
@@ -52,8 +56,29 @@ function screenQuestion(question,format){
 function screenPassages(passages){
   return passages.flatMap(p=>{
     const text=normalized(p.text).trim();
-    if(!text||explicitIdentifier(text)||ambiguousName(text)||OVERRIDE.test(text))return [];
-    return [{...p,text:text.slice(0,1200)}];
+    if(!text||OVERRIDE.test(text))return [];
+    if(!explicitIdentifier(text)&&!ambiguousName(text))return [{...p,text:text.slice(0,1200)}];
+    if(p.access!=='public'||RECONSTRUCTION.test(text)||CONTACT.test(text)||SOURCE_POINTER.test(text)||
+      SECRETS.test(text)||IDENTIFIER.test(text)||ENTITY_SUFFIX.test(text))return [];
+
+    // A Public passage can contain ordinary sentences alongside flagged text. Keep only
+    // a contiguous run of complete sentences, each screened independently.
+    let run='',best='';
+    for(const {segment,index} of SENTENCES.segment(text)){
+      const sentence=segment.trim();
+      const subject=sentence.match(/^\p{L}+/u)?.[0];
+      if((index===0&&p.start!==0)||!subject||!/[.!?]$/u.test(sentence)||
+        (!GENERIC_SUBJECTS.has(subject)&&!SAFE_WORDS.has(subject))||
+        explicitIdentifier(sentence)||ambiguousName(sentence)||sentence.length>1200){
+        run='';
+        continue;
+      }
+      if(run.length+sentence.length+1>1200)run='';
+      if(!run&&DEPENDENT_SUBJECTS.has(subject))continue;
+      run=run?run+' '+sentence:sentence;
+      if(run.length>best.length)best=run;
+    }
+    return best?[{...p,text:best,excerpted:true}]:[];
   });
 }
 function screenAnswer(text){
