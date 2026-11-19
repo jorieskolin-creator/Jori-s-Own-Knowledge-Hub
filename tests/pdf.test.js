@@ -81,3 +81,25 @@ test('On-demand lexical search retrieves text from a PDF with numbered page sour
  assert.equal(r.matches[0].page,1);
  assert.match(r.matches[0].passage,/Evidence Acquisition/);
 });
+
+test('Chat PDF attachments are parsed in a separate process and labelled without filenames',async()=>{
+ const {attachmentEvidence,isolatedPdf}=require('../api/_chat_pdf');
+ const signal=AbortSignal.timeout(6000);
+ const file=new File([makePdf('Reviewers check evidence before approval')],'Private Name.pdf',{type:'application/pdf'});
+ const result=await attachmentEvidence([file],'What evidence is checked?',signal);
+ assert.equal(result.passages[0].source,'User-provided PDF 1');
+ assert.equal(result.passages[0].page,1);
+ assert.doesNotMatch(JSON.stringify(result),/Private Name/);
+ await assert.rejects(()=>isolatedPdf(new File([Buffer.from('fake')],'fake.pdf'),signal),/readable PDFs/);
+});
+
+test('Chat PDF input rejects a third attachment',async()=>{
+ const {readUpload}=require('../api/_chat_pdf');
+ const multipart=new FormData();
+ multipart.set('question','What changed?');
+ for(let i=1;i<=3;i++)multipart.append('pdf',new Blob([makePdf('Synthetic evidence')],{type:'application/pdf'}),'fixture.pdf');
+ const request=new Request('https://example.test',{method:'POST',body:multipart});
+ const incoming={headers:{'content-type':request.headers.get('content-type')},
+   body:Buffer.from(await request.arrayBuffer())};
+ await assert.rejects(()=>readUpload(incoming),/up to two/);
+});
