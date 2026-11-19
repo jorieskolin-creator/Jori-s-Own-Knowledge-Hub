@@ -68,3 +68,10 @@ test('Public test scope never lists, opens, or returns Private sources',async()=
   assert.equal(new Set(listed).size,1);
   assert.equal(listed[0],process.env.PUBLIC_BLOB_STORE_ID||process.env.BLOB_STORE_ID||'store_6mg9Vu2ypJJMAwV3');
 });
+
+test('Chat source verification normalizes quoted strong ETags and rejects weak validators',()=>{
+  const {strongTag}=require('../api/_chat_evidence');
+  assert.equal(strongTag('"canonical"'),strongTag('canonical'));
+  assert.equal(strongTag('W/"canonical"'),null);
+  assert.equal(strongTag(''),null);
+});

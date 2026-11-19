@@ -47,13 +47,15 @@ async function runChatProbe(req,res,env=process.env,services={}){
   ]);
   const key='synthetic-pilot-probe-label';
   const question='What changes between Generate, Ground and Govern?';
-  const hub=(services.evidenceFor||createChatEvidence)({publicOnly:true});
+  const failureKinds=new Set();
+  const hub=(services.evidenceFor||createChatEvidence)({publicOnly:true,observeReadFailure:kind=>failureKinds.add(kind)});
   let evidence,result;
   await check('public_evidence',async()=>{
     evidence=await hub.acquire(question);
     if(evidence.passages.some(p=>p.access!=='public'))return 'scope_denied';
     return evidence.passages.length?'pass':'empty';
   });
+  if(failureKinds.size)checks.public_source_checks=[...failureKinds];
   await check('public_answer',async()=>{
     if(checks.public_evidence!=='pass'||checks.moderation!=='pass'||
       (checks[PRIMARY]!=='pass'&&checks[FALLBACK]!=='pass'))return 'skipped';
