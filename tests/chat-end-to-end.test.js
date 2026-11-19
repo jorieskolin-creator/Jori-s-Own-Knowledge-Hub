@@ -15,13 +15,13 @@ const privateId='private:02-frameworks/access-review.html';
 const privateText='<h1>Governance review</h1><p>A reviewer records the decision before the release can proceed.</p>';
 const staged=[
   {access:'private',pathname:privateId.slice(8),text:privateText},
-  {access:'public',pathname:'03-general-presentations/governance.html',text:'<p>The process involves a governance review.</p>'},
+  {access:'public',pathname:'03-general-presentations/governance.html',text:'<p>AI Governance assigns responsibility for decisions and establishes review requirements.</p>'},
   {access:'private',pathname:'06-personal/governance.html',text:'<p>PERSONALFIXTUREMARKER</p>'}
 ].map(r=>({...r,size:Buffer.byteLength(r.text),uploadedAt:'2026-11-10T00:00:00Z'}));
 const approved=staged.map(row=>({...entryFromDoc(metadata(row,row.access)),review_status:'Approved',key_terms:['governance','reviewer']}));
 const privateStore=process.env.PRIVATE_BLOB_STORE_ID||'store_YAAwH6FewcrImhA1';
 
-async function harness(t,{fault=false,allowFallback=true}={}){
+async function harness(t,{fault=false,allowFallback=true,publicOnly=false}={}){
   const data={};
   const state={
     read:async()=>({data}),
@@ -33,9 +33,10 @@ async function harness(t,{fault=false,allowFallback=true}={}){
   };
   const calls=[];
   let publication=approved;
-  function evidenceFor(){
+  function evidenceFor({publicOnly:scope}){
     const lookup=(pathname,storeId)=>staged.find(r=>r.pathname===pathname&&r.access===(storeId===privateStore?'private':'public'));
     return createChatEvidence({
+      publicOnly:scope,
       list:async({storeId})=>({blobs:staged.filter(r=>r.access===(storeId===privateStore?'private':'public'))}),
       headBlob:async(path,{storeId})=>({...lookup(path,storeId),etag:'fixture'}),
       readBlob:async(path,{storeId})=>{
@@ -48,7 +49,7 @@ async function harness(t,{fault=false,allowFallback=true}={}){
     });
   }
   const handler=createHandler({
-    state,evidenceFor,enabled:()=>true,publicOnly:()=>false,pdfEnabled:()=>true,wordEnabled:()=>true,
+    state,evidenceFor,enabled:()=>true,publicOnly:()=>publicOnly,pdfEnabled:()=>true,wordEnabled:()=>true,
     modelsFor:()=>({
       allowed:(provider,classes)=>provider===FALLBACK&&allowFallback&&classes.has('private'),
       moderate:async texts=>{
@@ -60,6 +61,12 @@ async function harness(t,{fault=false,allowFallback=true}={}){
         assert.doesNotMatch(JSON.stringify(input),/PERSONALFIXTUREMARKER|Jane Placeholder|private:|access-review.html/);
         if(fault&&provider===PRIMARY)throw new ModelUnavailable();
         if(kind==='chat_verification')return {supported:true};
+        if(publicOnly){
+          const passage=input.evidence.find(x=>x.text.includes('AI Governance assigns'));
+          assert.ok(passage);
+          assert.doesNotMatch(JSON.stringify(input),/records the decision/);
+          return {status:'supported',claims:[{text:'AI Governance defines who decides and how reviews work.',refs:[passage.ref]}]};
+        }
         const passage=input.evidence.find(x=>x.text.includes('records the decision'));
         if(!passage)return {status:'unknown',claims:[]};
         return {status:'partial',claims:[{text:'A reviewer documents the decision before release.',refs:[passage.ref]}]};
@@ -151,4 +158,18 @@ test('HTTP journey fails closed when the fallback cannot receive Private evidenc
   const response=await h.ask('What does a governance reviewer do?');
   assert.equal(response.status,503);
   assert.deepEqual(h.calls,[[PRIMARY,'chat_answer']]);
+});
+
+test('The signed-in Public chat answers the exact AI Governance question',async t=>{
+  const h=await harness(t,{publicOnly:true});
+  await h.login();
+  const reply=await h.ask('What is AI Governance?');
+  assert.equal(reply.status,200);
+  const result=await reply.json();
+  assert.equal(result.status,'answer');
+  assert.match(result.claims[0].text,/AI Governance/);
+  assert.equal(result.citations.length,1);
+  const blocked=await h.ask('What does Jane Placeholder do in AI Governance?');
+  assert.equal(blocked.status,422);
+  assert.match((await blocked.json()).error,/Remove names/);
 });

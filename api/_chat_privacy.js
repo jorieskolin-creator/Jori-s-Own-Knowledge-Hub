@@ -5,8 +5,8 @@ const IDENTIFIER=/(?:\+\d[\d ().-]{7,}\d|\b\d{9,}\b|\b\d{6}[+A-]\d{3}[0-9A-Z]\b|
 const ENTITY_PAIR=/(?<![\p{L}\p{N}_])\p{Lu}\p{Ll}{1,}(?:[’'-]\p{Lu}?\p{Ll}+)?[ \t]+\p{Lu}\p{Ll}{1,}(?![\p{L}\p{N}_])/gu;
 const ENTITY_SUFFIX=/(?:^|\W)[\p{L}\p{N}._-]+\s+(?:oyj?|abp?|ltd|inc|llc|corp|gmbh|plc)\b/iu;
 const PROPER_WORD=/(?<![\p{L}\p{N}_])(?:[\p{Lu}][\p{Ll}]{2,}|[\p{Ll}]+[\p{Lu}][\p{L}]+|[\p{Lu}]{3,})(?![\p{L}\p{N}_])/gu;
-const SAFE_WORDS=new Set('AI API CO2 CSCF CSV DOCX EU EUC GDPR HTML ICT IT JSON KPI LLM LZ MCP OCR PDF PII PR RFP SaaS SecOps SRE TTL URL UX FinOps GenAI DevOps Knowledge Hub Generate Ground Govern Level Landing Zone Public Private Word Helsinki Shaping Demand Validated Proposal Signal Agentic Flow Evolving Modernization Concept Value Creation Flywheel'.split(' '));
-const FRAMEWORK_PREFIXES=new Set(['At','For','From','In','To','With']);
+const SAFE_WORDS=new Set('AI API CO2 CSCF CSV DOCX EU EUC GDPR HTML ICT IT JSON KPI LLM LZ MCP OCR PDF PII PR RFP SaaS SecOps SRE TTL URL UX FinOps GenAI DevOps Knowledge Hub Generate Ground Govern Governance Data Cloud Model Level Landing Zone Public Private Word Helsinki Shaping Demand Validated Proposal Signal Agentic Flow Evolving Modernization Concept Value Creation Flywheel'.split(' '));
+const FRAMEWORK_PREFIXES=new Set(['At','For','From','In','To','With','Compare','Define','Describe','Explain','Summarize']);
 const SOURCE_POINTER=/(?:\b(?:public|private):|(?:^|\s)[\w.%/-]+\.(?:pdf|html?|docx)\b|\b06-personal\b)/iu;
 const RECONSTRUCTION=/(?:\b(?:verbatim|word.for.word|entire (?:file|document|source)|full (?:file|document|text|source)|(?:next|previous) (?:page|paragraph|section)|(?:reproduce|transcribe|copy|dump) (?:the |that |this )?(?:file|document|source|text|section))\b|\b(?:sanasta sanaan|koko asiakirja|koko dokumentti|seuraava sivu)\b)/iu;
 const OVERRIDE=/(?:ignore|override|reveal|disregard|ohita|paljasta)\s+(?:all |the |your |aiemmat )?(?:previous instructions|system prompt|developer instructions|safety rules|aiemmat ohjeet|järjestelmäohjeet)/iu;
@@ -45,8 +45,8 @@ function screenQuestion(question,format){
   if(typeof question!=='string'||question.trim().length<2||question.length>1200||
     !['chat','word'].includes(format))throw RangeError('Enter a question of 2 to 1,200 characters');
   const value=normalized(question).trim();
-  if(value.length<2||explicitIdentifier(value)||ambiguousName(value)||RECONSTRUCTION.test(value)||OVERRIDE.test(value))
-    throw new ChatPolicy();
+  if(value.length<2||RECONSTRUCTION.test(value)||OVERRIDE.test(value))throw new ChatPolicy();
+  if(explicitIdentifier(value)||ambiguousName(value))throw new ChatPolicy('question_identifier');
   return value;
 }
 function screenPassages(passages){

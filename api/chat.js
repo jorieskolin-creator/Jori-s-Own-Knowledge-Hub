@@ -137,7 +137,12 @@ function createHandler({state=createState(),enabled=()=>Boolean(process.env.FULL
     }catch(error){
       if(error instanceof ChatLimit)return retry(res,error.retryAt,'Chat limit reached. Try again after the indicated wait.');
       if(error instanceof ChatPdfError)return send(res,400,{error:error.message});
-      if(error instanceof ChatPolicy)return send(res,422,{error:'The request or answer could not be released under the Chat rules.'});
+      if(error instanceof ChatPolicy){
+        const message=error.reason==='question_identifier'
+          ?'Remove names, contact details, or other identifiers from the question.'
+          :'The request or answer could not be released under the Chat rules.';
+        return send(res,422,{error:message});
+      }
       if(error instanceof SyntaxError||error instanceof RangeError)return send(res,400,{error:'Invalid request'});
       return send(res,503,{error:'Chat temporarily unavailable'});
     }
