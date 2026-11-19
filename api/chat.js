@@ -9,7 +9,6 @@ const {createModels,ModelUnavailable}=require('./_chat_models');
 const {makeAnswer}=require('./_chat_answer');
 const {readUpload,attachmentEvidence,ChatPdfError}=require('./_chat_pdf');
 const {createReport,MIME}=require('./_chat_report');
-const {runChatProbe}=require('./_chat_probe');
 
 function chatShell(res,publicOnly){
   res.setHeader('Cache-Control','private, no-store, max-age=0');
@@ -22,7 +21,7 @@ function chatShell(res,publicOnly){
 <meta name="robots" content="noindex, nofollow"><title>Ask Knowledge Hub</title>
 <link rel="stylesheet" href="/knowledge-chat.css"><script src="/knowledge-chat.js" defer></script></head>
 <body><main><header><h1>Ask Knowledge Hub</h1><button id="chat-logout" type="button" hidden>Sign out</button></header>
-${publicOnly?'<p class="hint">Public-source testing. Use public or synthetic information in your questions.</p>':''}
+${publicOnly?'<p class="hint">Answers use approved public sources.</p>':''}
 <form id="chat-login" hidden><label for="chat-password">Chat password</label>
 <div class="login-fields"><input id="chat-password" type="password" required maxlength="1024" autocomplete="current-password"><button class="primary">Sign in</button></div></form>
 <section id="chat-workspace" hidden>
@@ -42,11 +41,11 @@ function jsonBody(req){
   if(Buffer.isBuffer(req.body))return JSON.parse(req.body.toString());
   return typeof req.body==='string'?JSON.parse(req.body):req.body;
 }
-function createHandler({state=createState(),enabled=()=>process.env.KNOWLEDGE_HUB_CHAT_ENABLED==='true',
+function createHandler({state=createState(),enabled=()=>Boolean(process.env.FULL_ACCESS_CHAT_PASSWORD),
   evidenceFor=createChatEvidence,modelsFor=createModels,
-  publicOnly=()=>process.env.CHAT_EVIDENCE_SCOPE==='public',
-  pdfEnabled=()=>process.env.KNOWLEDGE_HUB_CHAT_PDF_ENABLED==='true',extractAttachments=attachmentEvidence,
-  wordEnabled=()=>process.env.KNOWLEDGE_HUB_CHAT_WORD_ENABLED==='true',reportFor=createReport}={}){
+  publicOnly=()=>true,
+  pdfEnabled=()=>false,extractAttachments=attachmentEvidence,
+  wordEnabled=()=>true,reportFor=createReport}={}){
   function retry(res,at,message){
     res.setHeader('Retry-After',String(Math.max(1,Math.ceil((at-Date.now())/1000))));
     return send(res,429,{error:message});
@@ -67,8 +66,8 @@ function createHandler({state=createState(),enabled=()=>process.env.KNOWLEDGE_HU
     };
     try{
       const multipart=/^multipart\/form-data/i.test(req.headers['content-type']||'');
-      const publicTest=publicOnly();
-      if(multipart&&(publicTest||!pdfEnabled()))return send(res,415,{error:'PDF attachments are unavailable'});
+      const publicScope=publicOnly();
+      if(multipart&&(publicScope||!pdfEnabled()))return send(res,415,{error:'PDF attachments are unavailable'});
       if(!multipart&&!/^application\/json(?:;|$)/i.test(req.headers['content-type']||''))
         return send(res,415,{error:'Send a JSON request'});
       const body=multipart?await readUpload(req):jsonBody(req);
@@ -79,9 +78,9 @@ function createHandler({state=createState(),enabled=()=>process.env.KNOWLEDGE_HU
       await stillSignedIn();
       if((await models.moderate([question],new Set(['question'])))[0])throw new ChatPolicy();
       const attachments=multipart&&body.files.length?await extractAttachments(body.files,question,signal):{passages:[],incomplete:false};
-      const hub=evidenceFor({publicOnly:publicTest});
+      const hub=evidenceFor({publicOnly:publicScope});
       const evidence=await hub.acquire(question);
-      if(publicTest&&evidence.passages.some(p=>p.access!=='public'))throw new ChatPolicy();
+      if(publicScope&&evidence.passages.some(p=>p.access!=='public'))throw new ChatPolicy();
       const result=await makeAnswer({question,evidence:{...evidence,limited:evidence.limited||attachments.incomplete},
         hub,attachments:attachments.passages,models,
         key:config.key,beforeEgress:stillSignedIn});
@@ -110,7 +109,6 @@ function createHandler({state=createState(),enabled=()=>process.env.KNOWLEDGE_HU
   }
   return async function(req,res){
     const action=req.query?.action||'shell';
-    if(action==='probe')return runChatProbe(req,res);
     if(!enabled())return send(res,404,{error:'Chat unavailable'});
     if(!['shell','session','login','logout','answer'].includes(action))return send(res,404,{error:'Chat operation unavailable'});
     if(req.method!==(['shell','session'].includes(action)?'GET':'POST'))return send(res,405,{error:'Method not allowed'});

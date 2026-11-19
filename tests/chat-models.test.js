@@ -10,11 +10,12 @@ const fixture={ref:'H1',source:'private:01-solutions/hidden.html',access:'privat
 function testAnswer(models){
   return makeAnswer({question:'What does the reviewer do?',evidence:{passages:[fixture]},hub:{assertCurrent:async()=>{}},models,key:'test'});
 }
-test('OpenAI transport fixes the model and endpoint and opts out of stored responses',async()=>{
+test('OpenAI transport fixes the model and endpoint and uses the existing key and opts out of stored responses',async()=>{
   const sample={status:'supported',claims:[{text:'The reviewer checks the catalogue.',refs:['H1']}]};
-  const model=createModels({env:{CHAT_OPENAI_REGION:'eu',CHAT_OPENAI_API_KEY:'synthetic',CHAT_OPENAI_CLASSES:'question,private'},
+  const model=createModels({env:{KNOWLEDGE_HUB_API_KEY:'synthetic'},
     fetcher:async(url,options)=>{
-      assert.equal(url,'https://eu.api.openai.com/v1/responses');
+      assert.equal(url,'https://api.openai.com/v1/responses');
+      assert.equal(options.headers.Authorization,'Bearer synthetic');
       const body=JSON.parse(options.body);
       assert.equal(body.model,PRIMARY);
       assert.equal(body.store,false);
@@ -23,8 +24,11 @@ test('OpenAI transport fixes the model and endpoint and opts out of stored respo
       return Response.json({status:'completed',output:[{type:'message',content:[{type:'output_text',text:JSON.stringify(sample)}]}]});
     }
   });
-  assert.deepEqual(await model.ask(PRIMARY,'chat_answer','test',{question:'Synthetic'}, {},new Set(['question','private'])),sample);
-  await assert.rejects(()=>model.ask(PRIMARY,'chat_answer','test',{}, {},new Set(['attachment'])),ModelUnavailable);
+  assert.deepEqual(await model.ask(PRIMARY,'chat_answer','test',{question:'Synthetic'}, {},new Set(['question','public'])),sample);
+  for(const excluded of ['private','attachment']){
+    await assert.rejects(()=>model.ask(PRIMARY,'chat_answer','test',{}, {},new Set([excluded])),ModelUnavailable);
+    await assert.rejects(()=>model.moderate(['synthetic'],new Set([excluded])),ModelUnavailable);
+  }
 });
 test('Transient primary failure only uses an eligible fallback, with safe references on release',async()=>{
   const calls=[];

@@ -3,13 +3,11 @@ const {sign}=require('node:crypto');
 const {ChatPolicy}=require('./_chat_privacy');
 const PRIMARY='gpt-6.2-sol';
 const FALLBACK='gemini-4-hydrogen';
-const PRIMARY_URL={
-  global:'https://api.openai.com/v1',
-  eu:'https://eu.api.openai.com/v1'
-};
+const PRIMARY_URL='https://api.openai.com/v1';
+const PRIMARY_CLASSES=new Set(['question','public']);
 const MAX_RESPONSE_BYTES=96*1024;
 class ModelUnavailable extends Error{
-  constructor(status){super('Chat model temporarily unavailable');this.upstreamStatus=status;}
+  constructor(){super('Chat model temporarily unavailable');}
 }
 function eligible(setting,classes){
   const enabled=new Set(String(setting||'').split(',').map(s=>s.trim()));
@@ -40,10 +38,8 @@ function createModels({fetcher=fetch,env=process.env,signal}={}){
         signal:signal?AbortSignal.any([signal,timeout]):timeout});
       if(!response.ok){
         await response.body?.cancel().catch(()=>{});
-        if([408,429,500,502,503,504,529].includes(response.status))throw new ModelUnavailable(response.status);
-        const error=Error('Chat model request rejected');
-        error.upstreamStatus=response.status;
-        throw error;
+        if([408,429,500,502,503,504,529].includes(response.status))throw new ModelUnavailable();
+        throw Error('Chat model request rejected');
       }
       return await readJson(response);
     }catch(error){
@@ -52,11 +48,11 @@ function createModels({fetcher=fetch,env=process.env,signal}={}){
       throw error;
     }
   }
-  const openaiKey=env.CHAT_OPENAI_API_KEY||(env.CHAT_OPENAI_USE_EXISTING_KEY==='true'?env.KNOWLEDGE_HUB_API_KEY:null);
+  const openaiKey=env.KNOWLEDGE_HUB_API_KEY;
+  const allowedOpenai=classes=>Boolean(openaiKey&&[...classes].every(value=>PRIMARY_CLASSES.has(value)));
   const googleMode=env.CHAT_GEMINI_ROUTE;
-  const openaiBase=Object.hasOwn(PRIMARY_URL,env.CHAT_OPENAI_REGION)?PRIMARY_URL[env.CHAT_OPENAI_REGION]:null;
   function allowed(provider,classes){
-    if(provider===PRIMARY)return Boolean(openaiBase&&openaiKey&&eligible(env.CHAT_OPENAI_CLASSES,classes));
+    if(provider===PRIMARY)return allowedOpenai(classes);
     if(provider===FALLBACK){
       const credentials=googleMode==='developer-api'?env.GEMINI_API_KEY:googleMode==='vertex-eu'&&
         env.CHAT_GOOGLE_SERVICE_ACCOUNT_JSON&&/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(env.CHAT_GOOGLE_PROJECT||'');
@@ -68,9 +64,9 @@ function createModels({fetcher=fetch,env=process.env,signal}={}){
     return {'Content-Type':'application/json',Authorization:'Bearer '+openaiKey};
   }
   async function moderate(texts,classes){
-    if(!openaiBase||!openaiKey||!eligible(env.CHAT_OPENAI_MODERATION_CLASSES,classes))
+    if(!allowedOpenai(classes))
       throw new ModelUnavailable();
-    const result=await call(openaiBase+'/moderations',openaiHeaders(),JSON.stringify({
+    const result=await call(PRIMARY_URL+'/moderations',openaiHeaders(),JSON.stringify({
       model:'omni-moderation-latest',input:texts
     }),8000);
     if(!Array.isArray(result.results)||result.results.length!==texts.length||
@@ -97,7 +93,7 @@ function createModels({fetcher=fetch,env=process.env,signal}={}){
     if(!allowed(provider,classes))throw new ModelUnavailable();
     let raw;
     if(provider===PRIMARY){
-      const result=await call(openaiBase+'/responses',openaiHeaders(),JSON.stringify({
+      const result=await call(PRIMARY_URL+'/responses',openaiHeaders(),JSON.stringify({
         model:PRIMARY,store:false,reasoning:{effort:'low'},max_output_tokens:kind==='chat_verification'?850:3600,tools:[],
         instructions,input:JSON.stringify(input),
         text:{format:{type:'json_schema',name:kind,schema,strict:true}}

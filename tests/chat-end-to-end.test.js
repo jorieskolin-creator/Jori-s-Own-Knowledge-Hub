@@ -48,7 +48,7 @@ async function harness(t,{fault=false,allowFallback=true}={}){
     });
   }
   const handler=createHandler({
-    state,evidenceFor,enabled:()=>true,pdfEnabled:()=>true,wordEnabled:()=>true,
+    state,evidenceFor,enabled:()=>true,publicOnly:()=>false,pdfEnabled:()=>true,wordEnabled:()=>true,
     modelsFor:()=>({
       allowed:(provider,classes)=>provider===FALLBACK&&allowFallback&&classes.has('private'),
       moderate:async texts=>{

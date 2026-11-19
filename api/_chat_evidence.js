@@ -21,37 +21,25 @@ function retrievalQuery(question){
   }
   return selected.join(' ');
 }
-class SourceVersionError extends Error{
-  constructor(code){super('Chat source changed');this.code=code;}
-}
 function strongTag(value){
   if(typeof value!=='string'||!value||value.startsWith('W/'))return null;
   return value.replace(/^"([^"]+)"$/,'$1');
 }
 async function unchanged(path,storeId,doc,headBlob){
   const info=await headBlob(path,{storeId});
-  if(!info||info.pathname!==path)throw new SourceVersionError('head_path');
-  if(info.size!==doc.size)throw new SourceVersionError('head_size');
-  if(new Date(info.uploadedAt).getTime()!==new Date(doc.updated).getTime())
-    throw new SourceVersionError('head_timestamp');
-  const etag=strongTag(info.etag);
-  if(!etag)throw new SourceVersionError('head_etag_missing');
+  const etag=strongTag(info?.etag);
+  if(!etag||info.pathname!==path||info.size!==doc.size||
+    new Date(info.uploadedAt).getTime()!==new Date(doc.updated).getTime())throw Error('Chat source changed');
   return etag;
 }
-function createChatEvidence({publicOnly=false,list,readBlob=get,headBlob=head,readPublication=()=>readMaster({fresh:true}),observeReadFailure=()=>{}}={}){
+function createChatEvidence({publicOnly=false,list,readBlob=get,headBlob=head,readPublication=()=>readMaster({fresh:true})}={}){
   const versions=new Map(); // Per request. Never shared between users.
   const service=createService({list,publicOnly,readMaster:readPublication,allowPath:chatPath,get:async(path,opts,doc)=>{
-    try{
-      const etag=await unchanged(path,opts.storeId,doc,headBlob);
-      const file=await readBlob(path,{...opts,useCache:false,headers:{'accept-encoding':'identity'}});
-      if(file?.statusCode!==200)throw new SourceVersionError('get_status');
-      if(strongTag(file.blob?.etag)!==etag)throw new SourceVersionError('get_etag_mismatch');
-      versions.set(doc.id,{doc,storeId:opts.storeId,etag});
-      return {stream:file.stream,size:doc.size};
-    }catch(error){
-      observeReadFailure(error instanceof SourceVersionError?error.code:'read_failed');
-      throw error;
-    }
+    const etag=await unchanged(path,opts.storeId,doc,headBlob);
+    const file=await readBlob(path,{...opts,useCache:false,headers:{'accept-encoding':'identity'}});
+    if(file?.statusCode!==200||strongTag(file.blob?.etag)!==etag)throw Error('Chat source changed');
+    versions.set(doc.id,{doc,storeId:opts.storeId,etag});
+    return {stream:file.stream,size:doc.size};
   }});
   async function assertCurrent(passages){
     if(!passages.length)return;
