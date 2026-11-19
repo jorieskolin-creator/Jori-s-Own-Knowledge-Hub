@@ -1,6 +1,7 @@
 'use strict';
-const {randomUUID}=require('node:crypto');
+const {randomUUID,createHmac}=require('node:crypto');
 const {clientKey}=require('./_chat_auth');
+const {ChatPolicy}=require('./_chat_privacy');
 
 const MINUTE=60000,DAY=86400000,LEASE_MS=120000;
 const RESERVE_MICRO_USD=500000;
@@ -43,4 +44,17 @@ async function acquireSlot(req,session,state,key,cap=spendCap()){
     delete data[id];
   });
 }
-module.exports={acquireSlot,ChatLimit,RESERVE_MICRO_USD};
+async function reserveDisclosure(session,state,key,usage){
+  if(!usage.length)return;
+  await state.transact(data=>{
+    if(data['session:'+session.id]?.until!==session.exp)throw new ChatPolicy();
+    const updates=usage.map(([source,words])=>{
+      const name='quoted:'+session.id+':'+createHmac('sha256',key).update(source).digest('hex');
+      const count=(data[name]?.count||0)+words;
+      if(count>36)throw new ChatPolicy();
+      return [name,count];
+    });
+    for(const [name,count] of updates)data[name]={count,until:session.exp};
+  });
+}
+module.exports={acquireSlot,reserveDisclosure,ChatLimit,RESERVE_MICRO_USD};

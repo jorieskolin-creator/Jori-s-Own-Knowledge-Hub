@@ -50,18 +50,23 @@ function createModels({fetcher=fetch,env=process.env,signal}={}){
       throw error;
     }
   }
+  const openaiKey=env.CHAT_OPENAI_API_KEY||(env.CHAT_OPENAI_USE_EXISTING_KEY==='true'?env.KNOWLEDGE_HUB_API_KEY:null);
+  const googleMode=env.CHAT_GEMINI_ROUTE;
   const openaiBase=Object.hasOwn(PRIMARY_URL,env.CHAT_OPENAI_REGION)?PRIMARY_URL[env.CHAT_OPENAI_REGION]:null;
   function allowed(provider,classes){
-    if(provider===PRIMARY)return Boolean(openaiBase&&env.CHAT_OPENAI_API_KEY&&eligible(env.CHAT_OPENAI_CLASSES,classes));
-    if(provider===FALLBACK)return Boolean(env.CHAT_GEMINI_ENABLED==='true'&&env.CHAT_GOOGLE_SERVICE_ACCOUNT_JSON&&
-      /^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(env.CHAT_GOOGLE_PROJECT||'')&&eligible(env.CHAT_GEMINI_CLASSES,classes));
+    if(provider===PRIMARY)return Boolean(openaiBase&&openaiKey&&eligible(env.CHAT_OPENAI_CLASSES,classes));
+    if(provider===FALLBACK){
+      const credentials=googleMode==='developer-api'?env.GEMINI_API_KEY:googleMode==='vertex-eu'&&
+        env.CHAT_GOOGLE_SERVICE_ACCOUNT_JSON&&/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(env.CHAT_GOOGLE_PROJECT||'');
+      return Boolean(env.CHAT_GEMINI_ENABLED==='true'&&credentials&&eligible(env.CHAT_GEMINI_CLASSES,classes));
+    }
     return false;
   }
   function openaiHeaders(){
-    return {'Content-Type':'application/json',Authorization:'Bearer '+env.CHAT_OPENAI_API_KEY};
+    return {'Content-Type':'application/json',Authorization:'Bearer '+openaiKey};
   }
   async function moderate(texts,classes){
-    if(!openaiBase||!env.CHAT_OPENAI_API_KEY||!eligible(env.CHAT_OPENAI_MODERATION_CLASSES,classes))
+    if(!openaiBase||!openaiKey||!eligible(env.CHAT_OPENAI_MODERATION_CLASSES,classes))
       throw new ModelUnavailable();
     const result=await call(openaiBase+'/moderations',openaiHeaders(),JSON.stringify({
       model:'omni-moderation-latest',input:texts
@@ -91,7 +96,7 @@ function createModels({fetcher=fetch,env=process.env,signal}={}){
     let raw;
     if(provider===PRIMARY){
       const result=await call(openaiBase+'/responses',openaiHeaders(),JSON.stringify({
-        model:PRIMARY,store:false,reasoning:{effort:'low'},max_output_tokens:3600,tools:[],
+        model:PRIMARY,store:false,reasoning:{effort:'low'},max_output_tokens:kind==='chat_verification'?850:3600,tools:[],
         instructions,input:JSON.stringify(input),
         text:{format:{type:'json_schema',name:kind,schema,strict:true}}
       }));
@@ -102,14 +107,21 @@ function createModels({fetcher=fetch,env=process.env,signal}={}){
     }else{
       const body=JSON.stringify({
         systemInstruction:{parts:[{text:instructions}]},contents:[{role:'user',parts:[{text:JSON.stringify(input)}]}],
-        generationConfig:{maxOutputTokens:3600,thinkingConfig:{thinkingLevel:'LOW'},
+        generationConfig:{maxOutputTokens:kind==='chat_verification'?850:3600,thinkingConfig:{thinkingLevel:'LOW'},
           responseMimeType:'application/json',responseJsonSchema:schema}
       });
       // Bound the entire request below the documented implicit caching minimum, with space for framing.
       if(Buffer.byteLength(body)>3500)throw new ModelUnavailable();
-      const endpoint='https://aiplatform.eu.rep.googleapis.com/v1/projects/'+env.CHAT_GOOGLE_PROJECT+
-        '/locations/eu/publishers/google/models/'+FALLBACK+':generateContent';
-      const result=await call(endpoint,{'Content-Type':'application/json',Authorization:'Bearer '+await googleToken()},body);
+      let endpoint,headers={'Content-Type':'application/json'};
+      if(googleMode==='developer-api'){
+        endpoint='https://generativelanguage.googleapis.com/v1beta/models/'+FALLBACK+':generateContent';
+        headers['x-goog-api-key']=env.GEMINI_API_KEY;
+      }else{
+        endpoint='https://aiplatform.eu.rep.googleapis.com/v1/projects/'+env.CHAT_GOOGLE_PROJECT+
+          '/locations/eu/publishers/google/models/'+FALLBACK+':generateContent';
+        headers.Authorization='Bearer '+await googleToken();
+      }
+      const result=await call(endpoint,headers,body);
       const candidate=result.candidates?.[0];
       if(result.promptFeedback?.blockReason||['SAFETY','BLOCKLIST','PROHIBITED_CONTENT','SPII','RECITATION'].includes(candidate?.finishReason))
         throw new ChatPolicy();

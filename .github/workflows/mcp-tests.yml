@@ -3,7 +3,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, 'chat/**']
   workflow_dispatch:
 jobs:
   oauth:
@@ -15,5 +15,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --ignore-scripts
+      - run: |
+          if test -f package-lock.json; then
+            npm ci --ignore-scripts
+          else
+            npm install --ignore-scripts
+          fi
       - run: npm test

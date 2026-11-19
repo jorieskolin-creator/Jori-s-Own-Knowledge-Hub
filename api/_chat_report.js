@@ -3,6 +3,7 @@ const {readFile}=require('node:fs/promises');
 const {Document,Packer,Paragraph,TextRun,HeadingLevel}=require('docx');
 const {PDFDocument}=require('pdf-lib');
 const {screenAnswer}=require('./_chat_privacy');
+const {UNKNOWN}=require('./_chat_answer');
 const MIME='application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const MAX_PAGES=25;
 let renderer;
@@ -24,6 +25,7 @@ function reportTemplate(answer,compact){
   }));
   if(answer.status==='answer'){
     for(const claim of answer.claims)add(claim.text+' ['+claim.refs.join(', ')+']');
+    if(answer.partial)add(UNKNOWN);
     children.push(new Paragraph({text:'Evidence',heading:HeadingLevel.HEADING_1}));
     for(const item of answer.citations){
       const locator=item.page!==null?' · page '+item.page:item.section!==null?' · section '+item.section:'';

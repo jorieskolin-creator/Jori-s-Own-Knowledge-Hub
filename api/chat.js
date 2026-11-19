@@ -2,7 +2,7 @@
 const {send}=require('./_auth');
 const auth=require('./_chat_auth');
 const {createState}=require('./_chat_state');
-const {acquireSlot,ChatLimit}=require('./_chat_limits');
+const {acquireSlot,reserveDisclosure,ChatLimit}=require('./_chat_limits');
 const {screenQuestion,ChatPolicy}=require('./_chat_privacy');
 const {createChatEvidence}=require('./_chat_evidence');
 const {createModels,ModelUnavailable}=require('./_chat_models');
@@ -71,24 +71,31 @@ function createHandler({state=createState(),enabled=()=>process.env.KNOWLEDGE_HU
       const format=body?.format??'chat';
       if(format==='word'&&!wordEnabled())return send(res,415,{error:'Word reports are unavailable'});
       const question=screenQuestion(body?.question,format);
+      const models=modelsFor({signal});
+      await stillSignedIn();
+      if((await models.moderate([question],new Set(['question'])))[0])throw new ChatPolicy();
       const attachments=multipart&&body.files.length?await extractAttachments(body.files,question,signal):{passages:[],incomplete:false};
       const hub=evidenceFor();
       const evidence=await hub.acquire(question);
       const result=await makeAnswer({question,evidence:{...evidence,limited:evidence.limited||attachments.incomplete},
-        hub,attachments:attachments.passages,models:modelsFor({signal}),
+        hub,attachments:attachments.passages,models,
         key:config.key,beforeEgress:stillSignedIn});
       await stillSignedIn();
+      const sourceChecks=result.sourceChecks||[];
+      const disclosure=result.excerptUse||[];
       if(format==='word'){
         const bytes=await reportFor(result);
         await stillSignedIn();
-        await hub.assertCurrent(result.sourceChecks||[]);
+        await hub.assertCurrent(sourceChecks);
+        await reserveDisclosure(session,state,config.key,disclosure);
         res.setHeader('Content-Type',MIME);
         res.setHeader('Content-Disposition','attachment; filename="knowledge-hub-chat-report.docx"');
         res.setHeader('Cache-Control','private, no-store, max-age=0');
         res.setHeader('X-Content-Type-Options','nosniff');
         return res.status(200).end(bytes);
       }
-      const {sourceChecks:_internal,...publicResult}=result;
+      await reserveDisclosure(session,state,config.key,disclosure);
+      const {sourceChecks:_sourceChecks,excerptUse:_excerptUse,...publicResult}=result;
       return send(res,200,publicResult);
     }finally{
       res.off?.('close',onClose);

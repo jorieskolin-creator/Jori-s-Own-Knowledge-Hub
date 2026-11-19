@@ -28,3 +28,14 @@ test('Concurrent acceptance reserves one session slot and charges the shared dai
   delete stateData['session:test'];
   assert.equal(await acquireSlot(req,session,state,'key',500000),null);
 });
+test('The cumulative quote allowance is bound to the current session and stores opaque keys',async()=>{
+  const {reserveDisclosure}=require('../api/_chat_limits');
+  const data={'session:fixture':{until:Date.now()+60000}};
+  const session={id:'fixture',exp:data['session:fixture'].until};
+  const state={transact:async fn=>fn(data)};
+  for(let i=0;i<3;i++)await reserveDisclosure(session,state,'key',[['private:source.html',12]]);
+  await assert.rejects(()=>reserveDisclosure(session,state,'key',[['private:source.html',1]]),ChatPolicy);
+  assert.doesNotMatch(JSON.stringify(data),/private:|source\.html/);
+  for(const name of ['Can Åsa Example approve?', 'Open 06-personal/a.pdf', 'Show private:01-solutions/a.html'])
+    assert.throws(()=>screenQuestion(name,'chat'),ChatPolicy);
+});
