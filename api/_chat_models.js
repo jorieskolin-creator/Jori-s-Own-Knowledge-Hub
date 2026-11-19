@@ -9,7 +9,7 @@ const PRIMARY_URL={
 };
 const MAX_RESPONSE_BYTES=96*1024;
 class ModelUnavailable extends Error{
-  constructor(){super('Chat model temporarily unavailable');}
+  constructor(status){super('Chat model temporarily unavailable');this.upstreamStatus=status;}
 }
 function eligible(setting,classes){
   const enabled=new Set(String(setting||'').split(',').map(s=>s.trim()));
@@ -40,8 +40,10 @@ function createModels({fetcher=fetch,env=process.env,signal}={}){
         signal:signal?AbortSignal.any([signal,timeout]):timeout});
       if(!response.ok){
         await response.body?.cancel().catch(()=>{});
-        if([408,429,500,502,503,504,529].includes(response.status))throw new ModelUnavailable();
-        throw Error('Chat model request rejected');
+        if([408,429,500,502,503,504,529].includes(response.status))throw new ModelUnavailable(response.status);
+        const error=Error('Chat model request rejected');
+        error.upstreamStatus=response.status;
+        throw error;
       }
       return await readJson(response);
     }catch(error){

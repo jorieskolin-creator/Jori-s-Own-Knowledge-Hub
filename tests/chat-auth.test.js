@@ -67,3 +67,13 @@ test('Login throttles failed attempts and missing credentials fail closed',async
   finally{process.env.FULL_ACCESS_CHAT_PASSWORD=pass;}
 });
 module.exports={memoryState,request};
+
+test('The live readiness probe requires its scoped token before doing any work',async()=>{
+  const {authorized}=require('../api/_chat_probe');
+  const secret='a'.repeat(64);
+  const now=1000000;
+  const req={method:'POST',headers:{'x-chat-test-probe':secret}};
+  assert.equal(authorized(req,{CHAT_TEST_PROBE:secret+':'+(now+60000)},now),true);
+  assert.equal(authorized(req,{CHAT_TEST_PROBE:secret+':'+now},now),false);
+  assert.equal(authorized({...req,headers:{}},{CHAT_TEST_PROBE:secret+':'+(now+60000)},now),false);
+});

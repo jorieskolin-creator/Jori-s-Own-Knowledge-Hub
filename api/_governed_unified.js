@@ -49,10 +49,11 @@ function createService(deps={}){
  const masterCall=deps.readMaster||readMaster;
  const discoverCall=deps.discover||discover;
  const assembleCall=deps.assembleEvidence||assembleEvidence;
+ const scopes=deps.publicOnly?["public"]:SCOPES;
  const allowedPath=path=>permitted(path)&&(!deps.allowPath||deps.allowPath(path));
 
  async function enumerate(scope){
-  if(!SCOPES.includes(scope))throw Error('Invalid source scope');
+  if(!scopes.includes(scope))throw Error('Invalid source scope');
   let cursor,all=[],rounds=0;
   do{
    if(++rounds>100)throw Error('Document inventory pagination limit');
@@ -66,14 +67,14 @@ function createService(deps={}){
  }
  async function catalog(){
   if(stores.public()===stores.private())throw Error('Public and Private stores must use distinct identifiers');
-  // Both inventories are mandatory: never silently claim unified coverage from one store.
-  const [pub,priv]=await Promise.all([enumerate('public'),enumerate('private')]);
-  const docs=[...pub,...priv],unique=new Map(docs.map(d=>[d.id,d]));
+  // Each configured inventory is mandatory.
+  const docs=(await Promise.all(scopes.map(enumerate))).flat();
+  const unique=new Map(docs.map(d=>[d.id,d]));
   if(unique.size!==docs.length)throw Error('Duplicate source identifiers in catalog');
   return approval.authorizedCatalog(docs,masterCall);
  }
  async function open(doc){
-  if(!doc||!SCOPES.includes(doc.access)||doc.id!==doc.access+':'+doc.pathname||!allowedPath(doc.pathname))
+  if(!doc||!scopes.includes(doc.access)||doc.id!==doc.access+':'+doc.pathname||!allowedPath(doc.pathname))
    throw Error('Invalid source authorization');
   await approval.requireApprovedSource(doc,masterCall);
   return sourceCall(doc.pathname,{access:doc.access,storeId:stores[doc.access]()},doc);
@@ -93,8 +94,8 @@ function createService(deps={}){
   const raw=await masterCall();
   const records=raw?.table?.published_records||raw?.published_records||raw?.table?.records||raw?.records;
   if(!Array.isArray(records))throw Error('Master Table inventory unavailable');
-  const [pub,priv]=await Promise.all(SCOPES.map(scope=>
-   discoverCall(query,scope,docs.filter(d=>d.access===scope),30,records)));
+  const [pub,priv={candidates:[],candidates_found:0,unindexed_count:0,stale_count:0,limitations:[]}]=
+   await Promise.all(scopes.map(scope=>discoverCall(query,scope,docs.filter(d=>d.access===scope),30,records)));
   const candidates=[...pub.candidates,...priv.candidates].sort((a,b)=>
     b.score-a.score||a.id.localeCompare(b.id));
   const totalFound=pub.candidates_found+priv.candidates_found;
@@ -102,7 +103,7 @@ function createService(deps={}){
   const missing=pub.unindexed_count+priv.unindexed_count;
   const stale=pub.stale_count+priv.stale_count;
   return governed.sanitizedDiscovery({
-   query,scope:'public+private',discovery_method:'published_approved_sources_only',
+   query,scope:scopes.join('+'),discovery_method:'published_approved_sources_only',
    discovery_complete:false,source_eligibility:'PUBLISHED_APPROVED_ONLY',inventory_documents:docs.length,
    candidates_found:totalFound,candidates_returned:returned.length,
    candidates_truncated:totalFound>limit||pub.candidates_truncated||priv.candidates_truncated,
@@ -110,7 +111,8 @@ function createService(deps={}){
    unindexed_count:missing,stale_count:stale,
    candidates:returned,
    limitations:[...new Set([...pub.limitations,...priv.limitations,
-    'Both source collections were examined for discovery. Relevance ranking is lexical and semantic recall is not verified.'])]
+    scopes.length===2?'Both source collections were examined for discovery. Relevance ranking is lexical and semantic recall is not verified.':
+    'Discovery examined Public sources. Relevance ranking is lexical and semantic recall is not verified.'])]
   });
  }
  async function retrieve(args){
