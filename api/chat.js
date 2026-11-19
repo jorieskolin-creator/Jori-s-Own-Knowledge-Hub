@@ -7,6 +7,7 @@ const {screenQuestion,ChatPolicy}=require('./_chat_privacy');
 const {createChatEvidence}=require('./_chat_evidence');
 const {createModels,ModelUnavailable}=require('./_chat_models');
 const {makeAnswer}=require('./_chat_answer');
+const {readUpload,attachmentEvidence,ChatPdfError}=require('./_chat_pdf');
 
 function chatShell(res){
   res.setHeader('Cache-Control','private, no-store, max-age=0');
@@ -26,17 +27,25 @@ function chatShell(res){
 <textarea id="chat-question" required minlength="2" maxlength="1200" rows="4" aria-describedby="chat-input-guidance"></textarea>
 <p id="chat-input-guidance" class="hint">Use roles or generic descriptions in place of names and company names.</p>
 <label id="chat-follow-label" hidden><input type="checkbox" id="chat-follow"> Include my previous question for context</label>
+<div id="chat-pdf-fields" hidden><label for="chat-pdfs">PDF attachments (optional)</label>
+<input id="chat-pdfs" type="file" accept="application/pdf" multiple aria-describedby="chat-pdf-hint">
+<p id="chat-pdf-hint" class="hint">Up to two PDFs and 4 MB combined. Files are used for this request only.</p></div>
 <button id="chat-submit" class="primary">Ask</button></form>
 <section id="chat-results" aria-label="Answers" aria-live="polite"></section></section>
 <p id="chat-status" role="status">Checking session…</p></main></body></html>`);
 }
+function jsonBody(req){
+  if(Buffer.isBuffer(req.body))return JSON.parse(req.body.toString());
+  return typeof req.body==='string'?JSON.parse(req.body):req.body;
+}
 function createHandler({state=createState(),enabled=()=>process.env.KNOWLEDGE_HUB_CHAT_ENABLED==='true',
-  evidenceFor=createChatEvidence,modelsFor=createModels}={}){
+  evidenceFor=createChatEvidence,modelsFor=createModels,
+  pdfEnabled=()=>process.env.KNOWLEDGE_HUB_CHAT_PDF_ENABLED==='true',extractAttachments=attachmentEvidence}={}){
   function retry(res,at,message){
     res.setHeader('Retry-After',String(Math.max(1,Math.ceil((at-Date.now())/1000))));
     return send(res,429,{error:message});
   }
-  async function answer(req,res,config,body){
+  async function answer(req,res,config){
     const session=await auth.activeSession(req,state,config.key);
     if(!session)return send(res,401,{error:'Sign in to use Chat'});
     const release=await acquireSlot(req,session,state,config.key);
@@ -51,10 +60,17 @@ function createHandler({state=createState(),enabled=()=>process.env.KNOWLEDGE_HU
       if(!active||active.id!==session.id)throw new ModelUnavailable();
     };
     try{
-      const question=screenQuestion(body?.question,'chat');
+      const multipart=/^multipart\/form-data/i.test(req.headers['content-type']||'');
+      if(multipart&&!pdfEnabled())return send(res,415,{error:'PDF attachments are unavailable'});
+      if(!multipart&&!/^application\/json(?:;|$)/i.test(req.headers['content-type']||''))
+        return send(res,415,{error:'Send a JSON request'});
+      const body=multipart?await readUpload(req):jsonBody(req);
+      const question=screenQuestion(body?.question,body?.format||'chat');
+      const attachments=multipart&&body.files.length?await extractAttachments(body.files,question,signal):{passages:[],incomplete:false};
       const hub=evidenceFor();
       const evidence=await hub.acquire(question);
-      const result=await makeAnswer({question,evidence,hub,models:modelsFor({signal}),
+      const result=await makeAnswer({question,evidence:{...evidence,limited:evidence.limited||attachments.incomplete},
+        hub,attachments:attachments.passages,models:modelsFor({signal}),
         key:config.key,beforeEgress:stillSignedIn});
       await stillSignedIn();
       return send(res,200,result);
@@ -75,24 +91,25 @@ function createHandler({state=createState(),enabled=()=>process.env.KNOWLEDGE_HU
       if(action==='shell')return chatShell(res);
       if(action==='session'){
         const active=await auth.activeSession(req,state,config.key);
-        return send(res,200,{authenticated:Boolean(active)});
+        return send(res,200,{authenticated:Boolean(active),pdfs:Boolean(active)&&pdfEnabled()});
       }
       if(action==='logout'){
         await auth.logout(req,state,config.key);
         res.setHeader('Set-Cookie',auth.cookie());
         return send(res,200,{authenticated:false});
       }
+      if(action==='answer')return await answer(req,res,config);
       if(!/^application\/json(?:;|$)/i.test(req.headers['content-type']||''))
         return send(res,415,{error:'Send a JSON request'});
-      const body=Buffer.isBuffer(req.body)?JSON.parse(req.body.toString()):typeof req.body==='string'?JSON.parse(req.body):req.body;
-      if(action==='answer')return await answer(req,res,config,body);
+      const body=jsonBody(req);
       const result=await auth.login(req,body?.password,state,config);
       if(result.retryAt)return retry(res,result.retryAt,'Too many sign-in attempts');
       if(!result.token)return send(res,401,{error:'Invalid chat password'});
       res.setHeader('Set-Cookie',auth.cookie(result.token,auth.SESSION_MS/1000));
-      return send(res,200,{authenticated:true});
+      return send(res,200,{authenticated:true,pdfs:pdfEnabled()});
     }catch(error){
       if(error instanceof ChatLimit)return retry(res,error.retryAt,'Chat limit reached. Try again after the indicated wait.');
+      if(error instanceof ChatPdfError)return send(res,400,{error:error.message});
       if(error instanceof ChatPolicy)return send(res,422,{error:'The request or answer could not be released under the Chat rules.'});
       if(error instanceof SyntaxError||error instanceof RangeError)return send(res,400,{error:'Invalid request'});
       return send(res,503,{error:'Chat temporarily unavailable'});

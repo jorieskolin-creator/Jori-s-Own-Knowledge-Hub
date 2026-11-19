@@ -10,6 +10,8 @@ const question=el('chat-question');
 const results=el('chat-results');
 const followLabel=el('chat-follow-label');
 const follow=el('chat-follow');
+const pdfFields=el('chat-pdf-fields');
+const pdfFiles=el('chat-pdfs');
 let previous=null;
 let pending=null;
 
@@ -17,8 +19,11 @@ async function chatRequest(action,body,signal){
   const options={cache:'no-store',signal};
   if(body!==undefined){
     options.method='POST';
-    options.headers={'Content-Type':'application/json'};
-    options.body=JSON.stringify(body);
+    if(body instanceof FormData)options.body=body;
+    else{
+      options.headers={'Content-Type':'application/json'};
+      options.body=JSON.stringify(body);
+    }
   }
   const response=await fetch('/api/chat?action='+action,options);
   const result=await response.json();
@@ -29,7 +34,8 @@ async function chatRequest(action,body,signal){
   }
   return result;
 }
-function showSession(authenticated){
+function showSession(authenticated,pdfs=false){
+  pdfFields.hidden=!pdfs;
   login.hidden=authenticated;
   workspace.hidden=!authenticated;
   logout.hidden=!authenticated;
@@ -38,6 +44,7 @@ function showSession(authenticated){
     pending?.abort();
     previous=null;
     question.value='';
+    pdfFiles.value='';
     results.replaceChildren();
     follow.checked=false;
     followLabel.hidden=true;
@@ -72,7 +79,7 @@ login.addEventListener('submit',async event=>{
   password.value='';
   const button=login.querySelector('button');
   button.disabled=true;
-  try{showSession((await chatRequest('login',{password:supplied})).authenticated);}
+  try{const result=await chatRequest('login',{password:supplied});showSession(result.authenticated,result.pdfs);}
   catch(error){statusMessage.textContent=error.message;}
   finally{button.disabled=false;}
 });
@@ -87,15 +94,26 @@ questionForm.addEventListener('submit',async event=>{
   const context=follow.checked&&previous&&previous.expires>Date.now()?previous.question:null;
   const combined=context?context+'\n'+asked:asked;
   if(combined.length>1200){statusMessage.textContent='Shorten the question or clear the previous-question option.';return;}
+  const files=pdfFields.hidden?[]:[...pdfFiles.files];
+  if(files.length>2||files.reduce((sum,file)=>sum+file.size,0)>=4*1024*1024){
+    statusMessage.textContent='Choose up to two PDFs under 4 MB combined.';return;
+  }
+  let payload={question:combined};
+  if(files.length){
+    payload=new FormData();
+    payload.set('question',combined);
+    for(const file of files)payload.append('pdf',file);
+  }
   const button=el('chat-submit');
   pending=new AbortController();
   button.disabled=true;
   statusMessage.textContent='Checking the evidence…';
   try{
-    const result=await chatRequest('answer',{question:combined},pending.signal);
+    const result=await chatRequest('answer',payload,pending.signal);
     showAnswer(asked,result);
-    previous={question:asked,expires:Date.now()+5*60*1000};
-    followLabel.hidden=false;
+    previous=files.length?null:{question:asked,expires:Date.now()+5*60*1000};
+    followLabel.hidden=!previous;
+    pdfFiles.value='';
     follow.checked=false;
     question.value='';
     statusMessage.textContent='';
@@ -103,5 +121,5 @@ questionForm.addEventListener('submit',async event=>{
     if(error.name!=='AbortError')statusMessage.textContent=error.message;
   }finally{pending=null;button.disabled=false;}
 });
-chatRequest('session').then(result=>showSession(result.authenticated))
+chatRequest('session').then(result=>showSession(result.authenticated,result.pdfs))
   .catch(error=>{statusMessage.textContent=error.message;});
