@@ -4,6 +4,7 @@
     "api/golden-standards.js": {"maxDuration": 120}
   },
   "rewrites": [
+    {"source": "/chat", "destination": "/api/chat"},
     {
       "source": "/.well-known/oauth-protected-resource",
       "destination": "/api/oauth?route=resource"
