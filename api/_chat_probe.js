@@ -5,6 +5,7 @@ const {createModels,PRIMARY,FALLBACK}=require('./_chat_models');
 const {createChatEvidence}=require('./_chat_evidence');
 const {makeAnswer}=require('./_chat_answer');
 const {createReport}=require('./_chat_report');
+const {ChatPolicy}=require('./_chat_privacy');
 
 const probeSchema={type:'object',properties:{count:{type:'integer'}},required:['count'],additionalProperties:false};
 function authorized(req,env,now){
@@ -21,7 +22,18 @@ async function runChatProbe(req,res,env=process.env,services={}){
   const checks={};
   async function check(name,run){
     try{checks[name]=await run();}
-    catch(error){checks[name]=Number.isInteger(error?.upstreamStatus)?'upstream_'+error.upstreamStatus:'failed';}
+    catch(error){
+      const known={
+        'Chat retrieval failed':'blocked_package',
+        'Chat source no longer approved':'publication_changed',
+        'Chat source changed':'source_version_changed',
+        'Master Table could not be read':'publication_unavailable',
+        'Invalid Chat citation':'invalid_citation',
+        'Chat output incomplete':'incomplete_output'
+      };
+      checks[name]=Number.isInteger(error?.upstreamStatus)?'upstream_'+error.upstreamStatus:
+        error instanceof ChatPolicy?'policy_blocked':Object.hasOwn(known,error?.message)?known[error.message]:'failed';
+    }
   }
   const classes=new Set(['question']);
   await Promise.all([
@@ -33,16 +45,26 @@ async function runChatProbe(req,res,env=process.env,services={}){
       return result?.count===3?'pass':'unexpected';
     }))
   ]);
-  await check('public_answer',async()=>{
-    if(checks.moderation!=='pass'||(checks[PRIMARY]!=='pass'&&checks[FALLBACK]!=='pass'))return 'skipped';
-    const key='synthetic-pilot-probe-label';
-    const question='What changes between Generate, Ground and Govern?';
-    const hub=(services.evidenceFor||createChatEvidence)({publicOnly:true});
-    const evidence=await hub.acquire(question);
+  const key='synthetic-pilot-probe-label';
+  const question='What changes between Generate, Ground and Govern?';
+  const hub=(services.evidenceFor||createChatEvidence)({publicOnly:true});
+  let evidence,result;
+  await check('public_evidence',async()=>{
+    evidence=await hub.acquire(question);
     if(evidence.passages.some(p=>p.access!=='public'))return 'scope_denied';
-    const result=await makeAnswer({question,evidence,hub,models,key});
-    if(result.status!=='answer')return 'unknown';
-    return (services.reportFor||createReport)(result).then(()=> 'pass');
+    return evidence.passages.length?'pass':'empty';
+  });
+  await check('public_answer',async()=>{
+    if(checks.public_evidence!=='pass'||checks.moderation!=='pass'||
+      (checks[PRIMARY]!=='pass'&&checks[FALLBACK]!=='pass'))return 'skipped';
+    result=await makeAnswer({question,evidence,hub,models,key});
+    return result.status==='answer'?'pass':'unknown';
+  });
+  await check('word',async()=>{
+    await (services.reportFor||createReport)(result||{status:'answer',claims:[
+      {text:'A reviewer checks the evidence before release.',refs:['H1']}
+    ],citations:[{ref:'H1',label:'Hub source aabbccddeeff',page:null,section:1}]});
+    return 'pass';
   });
   return send(res,200,checks);
 }
