@@ -89,7 +89,7 @@ test('Admin API stages a document change and publishes only after explicit whole
  const x=normalizeEdit(entryFromDoc(doc('Legacy')),{review_status:'Approved',summary:'Original published summary'});
  let table=approveTable({schema_version:1,records:[x]}),etag='rev0',writes=0;
  const model={
-  './_auth':{valid:()=>true,postBody:req=>req.body,send:(res,status,payload)=>{
+  './_auth':{libraryRole:()=>'admin',postBody:req=>req.body,send:(res,status,payload)=>{
    res.statusCode=status;res.payload=payload;return res;
   }},
   './_master_table':{
@@ -102,6 +102,7 @@ test('Admin API stages a document change and publishes only after explicit whole
    inspectSourceLinks:()=>[],descriptionHealth:()=>({summary_words:3}),
    MASTER_TABLE_FORMAT:'1.0'
   },
+  './_library_access':require('../api/_library_access'),
   './_master_enrich':{extractPublic:()=>{throw Error('Not used')},callModel:()=>{throw Error('Not used')}}
  };
  const loaded={exports:{}};

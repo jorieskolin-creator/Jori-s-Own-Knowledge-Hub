@@ -187,7 +187,7 @@ test('Reviewed JSON import preserves manual entries and supersedes AI-only field
  const empty=entryFromDoc(doc('private','Empty'));
  let table={schema_version:1,records:[ai,manual,empty]},version='v1',writes=0;
  const dependencies={
-  './_auth':{valid:()=>true,postBody:req=>req.body,send:(res,status,data)=>{
+  './_auth':{libraryRole:()=>'admin',postBody:req=>req.body,send:(res,status,data)=>{
    res.statusCode=status;res.payload=data;return res;
   }},
   './_master_table':{
@@ -199,6 +199,7 @@ test('Reviewed JSON import preserves manual entries and supersedes AI-only field
    withPublication:require('../api/_master_table').withPublication,
    descriptionHealth,MASTER_TABLE_FORMAT:'1.0'
   },
+  './_library_access':require('../api/_library_access'),
   './_master_enrich':{extractPublic:()=>{throw Error('Do not enrich on import')},
    callModel:()=>{throw Error('Do not enrich on import')}}
  };

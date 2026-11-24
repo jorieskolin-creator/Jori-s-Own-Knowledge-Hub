@@ -7,9 +7,9 @@ const {approvedIndex}=require('../api/_approved_sources');
 function document(name){return {id:`private:01-solutions/${name}.html`,pathname:`01-solutions/${name}.html`,access:'private',title:name,updated:'2026-11-10T12:00:00.000Z',size:123};}
 function harness(records){
  let table={schema_version:1,records,published_records:[],publication:{status:'Draft',approved_at:null}};
- const auth={valid:()=>true,postBody:req=>req.body,send:(res,status,data)=>{res.statusCode=status;res.payload=data;return res}};
+ const auth={libraryRole:()=>'admin',postBody:req=>req.body,send:(res,status,data)=>{res.statusCode=status;res.payload=data;return res}};
  const master={...core,readMaster:async()=>({table:structuredClone(table),etag:'v1'}),writeMaster:async next=>{table=next}};
- const deps={'./_auth':auth,'./_master_table':master,'./_master_enrich':{}};
+ const deps={'./_auth':auth,'./_master_table':master,'./_master_enrich':{},'./_library_access':require('../api/_library_access')};
  const loaded={exports:{}};
  new Function('require','module','exports',fs.readFileSync(require.resolve('../api/master-table'),'utf8'))(name=>deps[name],loaded,loaded.exports);
  return {table:()=>table, async run(rows){let res={setHeader(){}};await loaded.exports({method:'POST',headers:{host:'hub.example',origin:'https://hub.example'},body:{action:'import',expected_etag:'v1',records:rows}},res);return res;}};

@@ -11,6 +11,7 @@
  '.mt-list tr:hover,.mt-selected{background:#e7f5ed}.mt-editor label{font-size:12px;font-weight:bold;display:block;margin-top:10px}.mt-editor textarea,.mt-editor input,.mt-editor select{width:100%;padding:8px;border:1px solid #cbd5e1;border-radius:6px;font:13px system-ui}'+
  '.mt-editor textarea{min-height:90px;resize:vertical}.mt-actions{display:flex;justify-content:flex-end;gap:10px;padding:13px 0}.mt-msg{padding:8px 20px;font-size:12px;color:#475569;min-height:32px}'+
  '.mt-error{color:#b42318}.mt-small{color:#64748b;font-size:11px}.mt-preview{color:#617085;line-height:1.4}.mt-editor input[readonly]{background:#eef2f6}.mt-obsolete{opacity:.7}.mt-publication{font-weight:600;color:#275e53}'+
+ '.mt-source{font-weight:650;text-align:left;color:#086b50;background:none;border:0;padding:0}.mt-editor dd{margin:0 0 12px;white-space:pre-wrap;overflow-wrap:anywhere}'+
  '@media(max-width:820px){.mt-main{display:block;height:65vh;overflow:auto}.mt-list,.mt-editor{max-height:45vh;border-right:0;border-bottom:1px solid #e1e8ef}}';
  document.head.appendChild(style);
  function node(tag,content,cls){const n=document.createElement(tag);if(content!==undefined)n.textContent=String(content);if(cls)n.className=cls;return n}
@@ -29,6 +30,14 @@
  '<section id="mtEditor" class="mt-editor"><p>Select a document to edit its Master Table metadata.</p></section></div>';
  document.body.appendChild(dialog);
  const state={records:[],etag:null,selected:null,busy:false,publication:null,publishedCount:0,entryDirty:false};
+ let session=0;
+ const role=()=>byId('app').dataset.role;
+ const isGuest=()=>role()==='guest';
+ function updateControls(){
+  const guest=isGuest();
+  for(const element of [updateButton,byId('mtScope'),byId('mtStatus'),byId('mtApprove'),byId('mtImport')])element.hidden=guest;
+  if(guest){byId('mtScope').value='all';byId('mtStatus').value='all'}
+ }
  function message(s,error=false){byId('mtMessage').textContent=s;byId('mtMessage').classList.toggle('mt-error',error)}
  async function request(action,properties={}){
   const read=action==='load';
@@ -51,9 +60,24 @@
  }
  function values(s){return String(s).split(/[\n,]/g).map(x=>x.trim()).filter(Boolean)}
  function lines(s){return String(s).split(/\r?\n/).map(x=>x.trim()).filter(Boolean)}
+ function showPublishedEntry(host,item){
+  if(!item){host.append(node('p','Select a document to read its published metadata.'));return}
+  host.append(node('h3',item.title));
+  const details=node('dl');
+  for(const [label,value] of [
+   ['Document type',item.document_type],['Summary',item.summary],
+   ['Key terms',item.key_terms?.join(', ')],['Themes',item.themes?.join(', ')],
+   ['Review status',item.review_status],['Text extraction',item.text_extraction?.toLowerCase().replaceAll('_',' ')],
+   ['Visual inspection',item.visual_inspection?.toLowerCase().replaceAll('_',' ')]
+  ]){
+   if(value)details.append(node('dt',label,'mt-publication'),node('dd',value));
+  }
+  host.append(details);
+ }
  function edit(){
   const host=byId('mtEditor');host.replaceChildren();
   const item=state.records.find(r=>r.id===state.selected);
+  if(isGuest()){showPublishedEntry(host,item);return}
   if(!item){host.append(node('p','Select a document to edit its Master Table metadata.'));return}
   host.append(node('h3',item.title));
   host.append(node('p',item.access+' · '+item.category+' · '+(item.source_available?'Source available':'SOURCE MISSING'),'mt-small'));
@@ -135,20 +159,36 @@
   for(const [index,r] of filtered.entries()){
    const tr=document.createElement('tr');if(r.id===state.selected)tr.className='mt-selected';
    if(r.review_status==='Obsolete')tr.classList.add('mt-obsolete');
-   const name=node('td');name.append(node('strong',r.title),node('div',r.document_type||'', 'mt-small'),node('div',r.pathname,'mt-small'));
-   const access=node('td',r.access);access.append(node('div',r.category,'mt-small'));if(!r.source_available)access.append(node('div','Unavailable','mt-error'));
+   const name=node('td');
+   const select=()=>{state.selected=r.id;render();edit()};
+   if(isGuest()){
+    const button=node('button',r.title,'mt-source');
+    button.type='button';button.onclick=select;name.append(button);
+   }else{
+    name.append(node('strong',r.title),node('div',r.pathname,'mt-small'));
+    tr.onclick=select;
+   }
+   name.append(node('div',r.document_type||'', 'mt-small'));
+   const access=node('td',r.access);access.append(node('div',r.category,'mt-small'));if(r.source_available===false)access.append(node('div','Unavailable','mt-error'));
    if(r.source_changed)access.append(node('div','Changed','mt-error'));
    tr.append(node('td',index+1),access,name);
-   tr.onclick=()=>{state.selected=r.id;render();edit()};host.append(tr);
+   host.append(tr);
   }
  }
  async function load(selected=state.selected){
-  const d=await request('load');state.records=d.records||[];state.etag=d.etag??null;
+  const current=session;
+  if(!role())return false;
+  const d=await request('load');
+  if(current!==session)return false;
+  if(Boolean(d.read_only)!==isGuest()){location.reload();return false}
+  state.records=d.records||[];state.etag=d.etag??null;
   state.publication=d.publication||{status:'Draft',approved_at:null};state.publishedCount=d.published_count||0;
-  byId('mtPublication').textContent='Master Table: '+state.publication.status+' · Last approved: '+
+  byId('mtPublication').textContent=isGuest()?
+   'Published Public entries · Read only'+(d.published_at?' · Last approved '+d.published_at:''):
+   'Master Table: '+state.publication.status+' · Last approved: '+
    (state.publication.approved_at||'Not yet')+' · Published entries: '+state.publishedCount+
    ' · MCP access: Published Approved documents only';
-  state.selected=state.records.some(r=>r.id===selected)?selected:null;render();edit();
+  state.selected=state.records.some(r=>r.id===selected)?selected:null;render();edit();return true;
  }
  async function update(){
   if(state.busy)return;
@@ -179,7 +219,12 @@
   finally{state.busy=false;updateButton.disabled=false;openButton.disabled=false}
  }
  updateButton.onclick=update;
- openButton.onclick=async()=>{dialog.showModal();try{await load();message('Save entries individually, then Save & approve Master Table to publish the full index.')}catch(e){message(e.message,true)}};
+ openButton.onclick=async()=>{
+  dialog.showModal();
+  try{
+   if(await load())message(isGuest()?'':'Save entries individually, then Save & approve Master Table to publish the full index.');
+  }catch(e){message(e.message,true)}
+ };
  byId('mtApprove').onclick=async()=>{
   if(state.entryDirty){message('Save the selected entry before approving the Master Table.',true);return}
   if(!confirm('Approve and publish the complete saved Master Table? Draft and Obsolete document statuses remain unchanged.'))return;
@@ -189,7 +234,7 @@
   catch(e){message(e.message,true)}finally{button.disabled=false}
  };
  byId('mtClose').onclick=()=>dialog.close();byId('mtSearch').oninput=render;byId('mtScope').onchange=render;byId('mtStatus').onchange=render;
- byId('mtReload').onclick=async()=>{try{await load();message('Master Table reloaded.')}catch(e){message(e.message,true)}};
+ byId('mtReload').onclick=async()=>{try{if(await load())message('Master Table reloaded.')}catch(e){message(e.message,true)}};
  byId('mtImport').onclick=()=>byId('mtJsonFile').click();
  byId('mtJsonFile').onchange=async()=>{
   const input=byId('mtJsonFile');if(!input.files.length)return;
@@ -205,5 +250,13 @@
     for(const issue of issues)list.append(node('li',issue));details.append(summary,list);byId('mtMessage').append(details);}
   }catch(e){message('Import failed: '+e.message,true)}finally{input.value=''}
  };
- byId('logout')?.addEventListener('click',()=>{if(dialog.open)dialog.close();state.records=[];state.etag=null});
+ document.addEventListener('knowledge-hub-open',updateControls);
+ document.addEventListener('knowledge-hub-close',()=>{
+  session++;
+  if(dialog.open)dialog.close();
+  state.records=[];state.etag=null;state.selected=null;
+  byId('mtRows').replaceChildren();byId('mtEditor').replaceChildren();byId('mtSearch').value='';
+  byId('mtPublication').textContent='';byId('mtCount').textContent='';message('');
+ });
+ updateControls();
 })();
