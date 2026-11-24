@@ -4,9 +4,9 @@ Live site: https://jori-knowledge-hub.vercel.app/
 
 ## Application status (v1.1)
 - Six categories with on-demand HTML discovery from Public and Private Vercel Blob stores.
-- Server-side admin login using `ADMIN_PASSWORD`, signed HttpOnly session using `SESSION_SECRET`, logout and session expiry.
-- Public documents open from their direct Blob URL.
-- Private documents are listed only to administrators, and served via `/api/private-document` after admin or guest authentication (`GUEST_PASSWORD`).
+- The landing page offers Admin, Chat, and Guest sign-in. Admin and Guest use signed HttpOnly library sessions and Chat uses its own session.
+- Guests can open Public documents outside Personal. Private cards outside Personal show their titles and a lock. Opening a Private document requires Admin access, including through legacy links.
+- Guests can read published Approved Public Master Table entries and run the fixed Golden Standard verification. Guest reports show outcomes and differences. Master Table writes and folder creation require Admin access.
 - Admin `Refresh Documents` scans both stores when the hub is opened and on demand.
 - Admin `Create Folder Structure` writes `.folder` placeholders for 6 categories and 7 Solutions folders to both stores once each store grants access. Placeholders are filtered from the HTML catalog.
 
@@ -34,18 +34,19 @@ Vercel Blob folders are virtual pathname prefixes, not persistent empty director
 Vercel Production sensitive environment variables:
 - `ADMIN_PASSWORD`
 - `GUEST_PASSWORD`
+- `FULL_ACCESS_CHAT_PASSWORD`
 - `SESSION_SECRET` (random >=32 characters)
 
 Public store: `store_6mg9Vu2ypJJMAwV3` (already connected).
 Private store: `store_YAAwH6FewcrImhA1` (**must be connected** to the `knowledge-hub` Vercel project via Storage > KnowledgeHub-Private > Projects > Connect project). If it is not linked, the API reports a warning instead of exposing contents. The code passes explicit store IDs to the Blob SDK using Vercel-managed OIDC credentials. Redeploy after connecting the store.
 
 ### Initial setup
-1. Verify `ADMIN_PASSWORD`, `GUEST_PASSWORD`, and `SESSION_SECRET` exist in Production.
+1. Verify the sign-in passwords and `SESSION_SECRET` exist in Production.
 2. Connect **KnowledgeHub-Private** to the existing Vercel project and ensure both stores are accessible with the deployed function's credentials.
 3. Redeploy `main`.
 4. Sign in at the live site. Select **Create Folder Structure** to write `.folder` placeholders.
 5. Upload an HTML document into each selected pathname in the appropriate store.
-6. Select **Refresh Documents** to verify indexing. Private document links go through the guest password page.
+6. Select **Refresh Documents** to verify indexing. Private documents require an Admin session.
 
 ## Important security limitations
 - This is an initial implementation, not a completed security audit. Verify direct unauthenticated requests to `/api/documents` and `/api/private-document` are rejected, and validate all domains/preview deployments. An admin-login lock is not a substitute for platform access controls on the underlying storage.
@@ -54,7 +55,7 @@ Private store: `store_YAAwH6FewcrImhA1` (**must be connected** to the `knowledge
 - Private Blob URLs cannot be fetched publicly. Private HTML is delivered with a restrictive sandbox CSP; interactive functionality that relies on same-origin privileges may not work.
 - The legacy static catalog entries are links to previously published URLs and are not managed by Blob locking.
 - Copying a public document to Private Blob does **not** revoke the original public link. Delete the old public object and verify its URL is no longer serving content. Cached/downloaded copies may remain.
-- Public category `06-personal` is public; include only deliberately shareable personal material.
+- Guests do not see Personal in the Hub. Store Personal files in Private Blob to protect them from anyone with an old direct Public Blob URL.
 - The UI's folder action requires a valid administrator session; it cannot create objects before Blob authorization is properly configured.
 
 ## Future improvements
@@ -65,11 +66,11 @@ Durable rate limiting, security verification, UI category-subfolders, richer met
 - Files ending in `.html`, `.htm`, or `.pdf` are discoverable in the six folder categories.
 - Blob-backed document cards open `/view.html?access=public|private&pathname=<blob-path>` rather than linking to the raw storage download.
 - `/api/view` streams the file with `Content-Disposition: inline`; PDFs are served as `application/pdf`, HTML as `text/html`.
-- Public document viewing does not require the admin password. Private viewing requires the guest password (or a current admin session).
+- Public document links outside Personal do not require an Admin password. Private and Personal files delivered through the Hub require an Admin session.
 - Uploaded HTML is rendered with a restrictive Content-Security-Policy `sandbox` and an iframe without `allow-same-origin`. This is essential: untrusted user-authored HTML must not access Knowledge Hub's admin-session origin.
 - Browser-native PDF display works in supporting browsers; readers may still choose to download. PDF viewers vary by device.
 - **Known limitation:** HTML presentations that load relative assets (CSS, JS, fonts, images) or depend on an unsandboxed document origin may need asset rewriting or independent deployment. Test each document after adding.
-- **Known limitation:** Protected links are session-cookie based; copying a rendered document URL to a different browser requires its guest password.
+- **Known limitation:** Protected links require that the recipient already has Admin access.
 - Never use an old public Blob or independent deployment URL to test protection. Such links must be deleted or restricted separately.
 
 ## Document visibility rule

@@ -96,6 +96,32 @@
   details.append(scroller);
   return details;
  }
+ function renderGuestReport(report,label){
+  const details=node('details');
+  const comparison=report.comparison;
+  const count=report.cases.length;
+  const matched=comparison?.matched_cases??report.cases.filter(row=>row.status===row.expected_status).length;
+  const summary=node('summary',label+' ');
+  if(comparison)summary.append(node('span',comparisonLabels[comparison.severity],'gs-tag gs-tag-'+comparison.severity));
+  else summary.append(node('span',report.status));
+  summary.append(node('span',' · '+matched+'/'+count+' matched expected results · '+date(report.completed_at)));
+  details.append(summary);
+  if(comparison)details.append(renderComparison(comparison));
+  if(report.snapshot_changed)details.append(node('p','The published snapshot changed during this run.','status warn'));
+  const scroller=node('div',undefined,'gs-table');
+  const table=node('table'),head=node('tr'),body=node('tbody');
+  for(const label of ['Case','Expected / Actual','Evidence','Tool failures'])head.append(node('th',label));
+  const thead=node('thead');thead.append(head);table.append(thead,body);
+  for(const row of report.cases){
+   const tr=node('tr');
+   tr.append(node('th',row.id+' · '+row.title),
+    node('td',row.expected_status+' / '+row.status,row.status===row.expected_status?'gs-pass':'gs-review'),
+    node('td',row.passages_returned+' passages'),node('td',row.failures));
+   body.append(tr);
+  }
+  scroller.append(table);details.append(scroller);
+  return details;
+ }
  async function request(method){
   const response=await fetch('/api/golden-standards',{method,credentials:'same-origin',cache:'no-store'});
   const data=await response.json();
@@ -118,9 +144,10 @@
      data.master_table_available?'Master Table has no published snapshot':'Master Table unavailable');
    reports.replaceChildren();
    if(data.latest){
-    const currentReport=data.latest.deployment.id===data.deployment.id&&
+    const currentReport=data.guest?data.latest_current:data.latest.deployment.id===data.deployment.id&&
      data.latest.published_snapshot.revision===snapshot?.revision&&!data.latest.snapshot_changed;
-    reports.append(renderReport(data.latest,currentReport?'Latest verification':'Latest verification for an earlier deployment or snapshot'));
+    const label=currentReport?'Latest verification':'Latest verification for an earlier deployment or snapshot';
+    reports.append((data.guest?renderGuestReport:renderReport)(data.latest,label));
    }else{
     reports.append(node('p',data.report_storage_available?'No verification report yet.':'Saved reports are unavailable.','small'));
    }
@@ -136,12 +163,12 @@
   run.disabled=true;
   notice.textContent='Running all 10 connector checks…';
   try{
-   const {report,saved}=await request('POST');
+   const {report,saved,guest}=await request('POST');
    if(current!==session)return;
    const refreshed=saved&&await refresh();
    if(current!==session)return;
    if(!refreshed){
-    reports.replaceChildren(renderReport(report,'Current verification'));
+    reports.replaceChildren((guest?renderGuestReport:renderReport)(report,'Current verification'));
    }
    if(reports.firstElementChild?.tagName==='DETAILS')reports.firstElementChild.open=true;
    notice.textContent=saved?'Verification finished.':'Verification finished. The report could not be saved.';
@@ -153,7 +180,7 @@
   }
  };
  document.addEventListener('knowledge-hub-open',refresh);
- document.getElementById('logout').addEventListener('click',()=>{
+ document.addEventListener('knowledge-hub-close',()=>{
   session++;
   health.textContent='Checking status…';
   notice.textContent='';

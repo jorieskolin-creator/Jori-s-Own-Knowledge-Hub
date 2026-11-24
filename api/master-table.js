@@ -1,6 +1,7 @@
 'use strict';
-const {send,valid,postBody}=require('./_auth');
-const {readMaster,writeMaster,sourceInventory,reconcile,normalizeEdit,inspectSourceLinks,descriptionHealth,MASTER_TABLE_FORMAT,withPublication,stageTable,approveTable}=require('./_master_table');
+const {send,libraryRole,postBody}=require('./_auth');
+const {readMaster,writeMaster,sourceInventory,reconcile,normalizeEdit,inspectSourceLinks,descriptionHealth,MASTER_TABLE_FORMAT,withPublication,stageTable,approveTable,isGoldenStandardPath}=require('./_master_table');
+const {isPersonalPath}=require('./_library_access');
 const {extractPublic,callModel}=require('./_master_enrich');
 function safeMutation(req){
  const origin=req.headers?.origin,host=req.headers?.host;
@@ -123,10 +124,26 @@ async function importEntries(res,body){
  return send(res,200,{imported:modified,skipped,skipped_entries,version_review,
   manually_maintained_entries_preserved:true,ai_only_entries_may_be_replaced:true});
 }
+async function guestTable(res){
+ const {table}=await readMaster({fresh:true});
+ const approvedAt=table.publication.approved_at;
+ const published=approvedAt||table.publication.status==='Approved';
+ const records=published?table.published_records.filter(row=>
+  row.access==='public'&&typeof row.pathname==='string'&&row.id==='public:'+row.pathname&&
+  !isPersonalPath(row.pathname)&&!isGoldenStandardPath(row.pathname)&&row.review_status==='Approved'
+ ).map(({id,title,category,document_type,summary,key_terms,themes,review_status,text_extraction,visual_inspection})=>
+  ({id,title,category,document_type,summary,key_terms,themes,review_status,text_extraction,visual_inspection,access:'public'})):[];
+ return send(res,200,{read_only:true,published_at:approvedAt,records,count:records.length});
+}
 module.exports=async function(req,res){
  res.setHeader('Cache-Control','no-store');
- if(!valid(req,'admin'))return send(res,401,{error:'Admin login required'});
+ const role=libraryRole(req);
+ if(!role)return send(res,401,{error:'Library sign-in required'});
  try{
+  if(role==='guest'){
+   if(req.method!=='GET')return send(res,403,{error:'Master Table is read-only for Guest'});
+   return await guestTable(res);
+  }
   if(req.method==='GET'){
    const {table,etag}=await readMaster();
    return send(res,200,{schema_version:1,master_table_format:MASTER_TABLE_FORMAT,etag,updated_at:table.updated_at,

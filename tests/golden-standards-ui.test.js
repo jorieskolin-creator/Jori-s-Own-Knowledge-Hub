@@ -114,7 +114,8 @@ test('report storage uses the metadata ETag, retries conflicts and retains the p
     writes++;
    }
   },
-  './_auth':{valid:req=>req.admin,send:(res,code,payload)=>Object.assign(res,{code,payload})},
+  './_guest_verification':require('../api/_guest_verification'),
+  './_auth':{valid:(req,role)=>role==='admin'&&req.admin,send:(res,code,payload)=>Object.assign(res,{code,payload})},
   './_master_table':{STORE_ID:()=> 'test-store',readMaster:async()=>({table})},
   './_governed_unified':{createService:()=>({catalog:async()=>[]})},
   './_golden_standard_checks':{FIXTURE_PATH,publishedSnapshot,compareResults,deploymentInfo:()=>({id:deployment,commit:deployment}),
