@@ -222,9 +222,9 @@ test('Private Master Table discovery and automatic evidence tools are OAuth-scop
   assert.match(JSON.parse(noAuth.text).result.content[0].text,/Authorization required/);
  }
 });
-test('Master Table administration rejects requests without an admin session',async()=>{
+test('Master Table rejects requests without a library session',async()=>{
  const masterTable=require('../api/master-table');
  const r=await request(masterTable,'GET',{}, {}, {});
  assert.equal(r.statusCode,401);
- assert.match(r.text,/Admin login required/);
+ assert.match(r.text,/Library sign-in required/);
 });
