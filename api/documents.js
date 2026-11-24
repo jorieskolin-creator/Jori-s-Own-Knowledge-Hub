@@ -1,6 +1,7 @@
 const {list}=require('@vercel/blob');
-const {send,valid}=require('./_auth');
+const {send,libraryRole}=require('./_auth');
 const {isGoldenStandardPath}=require('./_master_table');
+const {isPersonalPath}=require('./_library_access');
 
 const CATS={
   '01-solutions':'Solutions',
@@ -20,7 +21,7 @@ function isIndexedDocument(pathname){
   return parts.length>=2&&parts.every(Boolean)&&Object.hasOwn(CATS,parts[0]);
 }
 
-async function scan(storeId,access){
+async function scan(storeId,access,role){
   const all=[];
   let cursor;
   do{
@@ -29,18 +30,24 @@ async function scan(storeId,access){
     all.push(...r.blobs);
     cursor=r.hasMore?r.cursor:null;
   }while(cursor);
-  return all.filter(b=>isIndexedDocument(b.pathname)).map(b=>{
+  return all.filter(b=>isIndexedDocument(b.pathname)&&(role==='admin'||!isPersonalPath(b.pathname))).map(b=>{
     const p=b.pathname.split('/');
-    return {
-      id:access+':'+b.pathname,
+    const card={
       title:cleanTitle(p[p.length-1]),
       category:CATS[p[0]],
       group:p.length>2?cleanTitle(p.slice(1,-1).join(' / ')):'General',
       access,
       golden_standard:isGoldenStandardPath(b.pathname),
+      updated:b.uploadedAt||null
+    };
+    if(role==='guest'&&access==='private'){
+      return {...card,solution_folder:p[0]==='01-solutions'&&p.length>2?p[1]:null};
+    }
+    return {
+      ...card,
+      id:access+':'+b.pathname,
       pathname:b.pathname,
-      url:access==='public'?b.url:null,
-      updated:b.uploadedAt||null,
+      url:role==='admin'&&access==='public'?b.url:null,
       size:b.size,
       origin:'blob'
     };
@@ -49,28 +56,31 @@ async function scan(storeId,access){
 
 module.exports=async function(req,res){
   if(req.method!=='GET')return send(res,405,{error:'Method not allowed'});
-  if(!valid(req,'admin'))return send(res,401,{error:'Admin login required'});
+  const role=libraryRole(req);
+  if(!role)return send(res,401,{error:'Library sign-in required'});
   const warnings=[];
   let publicDocs=[],privateDocs=[];
   try{
-    publicDocs=await scan(process.env.PUBLIC_BLOB_STORE_ID||process.env.BLOB_STORE_ID||'store_6mg9Vu2ypJJMAwV3','public');
+    publicDocs=await scan(process.env.PUBLIC_BLOB_STORE_ID||process.env.BLOB_STORE_ID||'store_6mg9Vu2ypJJMAwV3','public',role);
   }catch{
-    warnings.push('Public storage unavailable. Check Blob project connection and credentials.');
+    warnings.push(role==='admin'?'Public storage unavailable. Check Blob project connection and credentials.':'Public documents are temporarily unavailable.');
   }
   try{
-    privateDocs=await scan(process.env.PRIVATE_BLOB_STORE_ID||'store_YAAwH6FewcrImhA1','private');
+    privateDocs=await scan(process.env.PRIVATE_BLOB_STORE_ID||'store_YAAwH6FewcrImhA1','private',role);
   }catch{
-    warnings.push('Private storage unavailable. Check the Private Blob project connection and redeploy.');
+    warnings.push(role==='admin'?'Private storage unavailable. Check the Private Blob project connection and redeploy.':'Some locked document cards are temporarily unavailable.');
   }
   let legacy=[];
   try{
-    legacy=require('../catalog/public-documents.json').documents.map(d=>({
+    legacy=require('../catalog/public-documents.json').documents
+      .filter(d=>role==='admin'||String(d.category).toLowerCase()!=='personal').map(d=>({
       id:d.id,title:d.title,
       category:({'solutions':'Solutions','frameworks':'Frameworks & Methods','presentations':'General Presentations','shared':'Shared Knowledge','random':'Random','personal':'Personal'})[d.category]||'Random',
       group:d.group||'Existing deployment',access:'public',url:d.url,updated:d.updated,origin:'legacy'
     }));
   }catch{}
   return send(res,200,{
+    role,
     documents:[...publicDocs,...privateDocs,...legacy],
     counts:{public:publicDocs.length,private:privateDocs.length,legacy:legacy.length},
     warnings,
